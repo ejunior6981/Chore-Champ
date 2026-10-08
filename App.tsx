@@ -690,9 +690,13 @@ const App: React.FC = () => {
         onLogout={handleLogout}
         onResetData={() => {
           console.log('[DEBUG-RESET] onResetData called');
+          console.log('[DEBUG-RESET] currentUser:', currentUser?.name);
+          console.log('[DEBUG-RESET] localStorage available:', 'localStorage' in window);
+          console.log('[DEBUG-RESET] localStorage keys before:', Object.keys(localStorage).filter(k => k.includes('chore-champ')).join(', '));
           if (window.confirm('Are you sure you want to wipe all data? This cannot be undone!')) {
             console.log('[DEBUG-RESET] Confirm clicked, calling resetStorage');
             resetStorage();
+            console.log('[DEBUG-RESET] resetStorage() returned:', resetStorage);
             console.log('[DEBUG-RESET] reload triggered');
             window.location.reload();
           } else {

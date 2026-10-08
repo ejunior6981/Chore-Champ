@@ -127,8 +127,10 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                                     <hr className="my-1" />
                                     <li>
                                         <button
-                                            onClick={() => {
-                                                console.log('[DEBUG-RESET] Reset button clicked');
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                console.log('[DEBUG-RESET] Reset button clicked (Header)');
                                                 onResetData();
                                             }}
                                             className="w-full text-left p-3 text-amber-600 hover:bg-amber-50 transition-colors flex items-center gap-2"
