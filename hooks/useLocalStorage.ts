@@ -38,22 +38,18 @@ export const useStorageReset = (): (() => void) => {
       return;
     }
     
-    const keys = [
-      'chore-champ-users',
-      'chore-champ-currentUser',
-      'chore-champ-chores',
-      'chore-champ-rewards',
-      'chore-champ-requests',
-      'chore-champ-notifications',
-      'chore-champ-pin',
-    ];
-    console.log('[DEBUG-RESET] Starting reset with keys:', keys);
+    // Get ALL chore-champ keys
+    const allKeys = Object.keys(localStorage)
+      .filter(key => key.startsWith('chore-champ-'))
+      .sort();
+    
+    console.log('[DEBUG-RESET] Starting reset with keys:', allKeys);
     
     let success = true;
-    keys.forEach(key => {
+    allKeys.forEach(key => {
       try {
         const currentValue = localStorage.getItem(key);
-        console.log(`[DEBUG-RESET] Removing: ${key}`, currentValue);
+        console.log(`[DEBUG-RESET] Removing: ${key}`, currentValue ? '...' : '(empty)');
         localStorage.removeItem(key);
         const afterRemoval = localStorage.getItem(key);
         console.log(`[DEBUG-RESET] After removal: ${key} = ${afterRemoval}`);
