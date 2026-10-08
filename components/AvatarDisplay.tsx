@@ -36,6 +36,14 @@ const AvatarDisplay: React.FC<AvatarDisplayProps> = ({ avatar, sizeClass = 'w-10
     );
   }
 
+  if (typeof avatar !== 'string') {
+    return (
+      <div className={`${sizeClass} ${commonClasses}`} {...rest}>
+        <UserCircleIcon className="w-full h-full text-white/80" />
+      </div>
+    );
+  }
+
   if (avatar.startsWith('data:image')) {
     return (
       <div className={`${sizeClass} ${commonClasses}`} {...rest}>

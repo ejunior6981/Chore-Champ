@@ -4,21 +4,25 @@ import { StarIcon, BellIcon, ChevronDownIcon } from './icons';
 import { User, Notification } from '../types';
 import AvatarDisplay from './AvatarDisplay';
 import NotificationPanel from './NotificationPanel';
+import { RefreshCwIcon } from './icons';
 
 interface HeaderProps {
   points: number;
-  currentUser: User;
+  currentUser: User | undefined;
   allUsers: User[];
   onUserChange: (userId: number) => void;
   onEditProfile: () => void;
+  onLogout: () => void;
+  onResetData: () => void;
   unreadNotificationsCount: number;
   onToggleNotifications: () => void;
   isNotificationsOpen: boolean;
   notifications: Notification[];
   onClearNotifications: () => void;
+  resetButton?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserChange, onEditProfile, unreadNotificationsCount, onToggleNotifications, isNotificationsOpen, notifications, onClearNotifications }) => {
+const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserChange, onEditProfile, onLogout, onResetData, unreadNotificationsCount, onToggleNotifications, isNotificationsOpen, notifications, onClearNotifications, resetButton = false }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +50,7 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
         <div className="flex items-center space-x-2 sm:space-x-4">
             <div className="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2">
                 <StarIcon className="w-6 h-6 sm:w-8 sm:h-8 text-amber-300" />
-                <span className="text-2xl sm:text-3xl font-bold text-white">{currentUser.role === 'child' ? points : '–'}</span>
+                <span className="text-2xl sm:text-3xl font-bold text-white">{currentUser?.role === 'child' ? points : '–'}</span>
             </div>
             
             <div className="relative">
@@ -76,8 +80,8 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                     onClick={() => setIsUserMenuOpen(prev => !prev)}
                     className="flex items-center space-x-2 text-white bg-white/20 hover:bg-white/30 rounded-full pl-3 pr-2 py-2 text-sm font-medium transition-colors"
                 >
-                    <AvatarDisplay avatar={currentUser.avatar} sizeClass="w-8 h-8" />
-                    <span className="font-semibold">{currentUser.name}</span>
+                    <AvatarDisplay avatar={currentUser?.avatar} sizeClass="w-8 h-8" />
+                    <span className="font-semibold">{currentUser?.name || '...'}</span>
                     <ChevronDownIcon className="w-5 h-5 opacity-70"/>
                 </button>
 
@@ -86,20 +90,20 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                         <ul>
                             {allUsers.map(user => (
                                 <li key={user.id}>
-                                    <button 
+                                    <button
                                         onClick={() => handleUserSelect(user.id)}
-                                        className={`w-full text-left flex items-center space-x-3 p-3 transition-colors ${currentUser.id === user.id ? 'bg-sky-50 text-sky-700 font-bold' : 'text-slate-700 hover:bg-slate-100'}`}
+                                        className={`w-full text-left flex items-center space-x-3 p-3 transition-colors ${currentUser?.id === user.id ? 'bg-sky-50 text-sky-700 font-bold' : 'text-slate-700 hover:bg-slate-100'}`}
                                     >
                                         <AvatarDisplay avatar={user.avatar} sizeClass="w-8 h-8" />
                                         <span>{user.name}</span>
                                     </button>
                                 </li>
                             ))}
-                             {currentUser.role === 'child' && (
+                             {currentUser?.role === 'child' && (
                                 <>
                                     <hr className="my-1" />
                                      <li>
-                                        <button 
+                                        <button
                                             onClick={() => { onEditProfile(); setIsUserMenuOpen(false); }}
                                             className="w-full text-left p-3 text-slate-700 hover:bg-slate-100 transition-colors"
                                         >
@@ -108,9 +112,34 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                                     </li>
                                 </>
                             )}
-                        </ul>
-                    </div>
-                )}
+                            {currentUser?.role === 'parent' && (
+                                <>
+                                    <hr className="my-1" />
+                                    <li>
+                                        <button
+                                            onClick={onLogout}
+                                            className="w-full text-left p-3 text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V4a1 1 0 00-1-1H3zm11 1a1 1 0 011 1v6a1 1 0 11-2 0V5a1 1 0 011-1z" clipRule="evenodd" />
+                                            </svg>
+                                            <span>Logout</span>
+                                        </button>
+                                        <hr className="my-1" />
+                                        <li>
+                                            <button
+                                                onClick={onResetData}
+                                                className="w-full text-left p-3 text-amber-600 hover:bg-amber-50 transition-colors flex items-center gap-2"
+                                            >
+                                                <RefreshCwIcon className="h-5 w-5" />
+                                                <span>Reset All Data</span>
+                                            </button>
+                                        </li>
+                                    </>
+                                )}
+                            </ul>
+                        </div>
+                    )}
             </div>
         </div>
       </div>

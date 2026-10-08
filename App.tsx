@@ -3,17 +3,21 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, User } from './types';
 import type { Notification } from './types';
-import { useLocalStorage } from './hooks/useLocalStorage';
+import { useLocalStorage, useStorageReset } from './hooks/useLocalStorage';
 import Header from './components/Header';
 import ChoreCard from './components/ChoreCard';
 import RewardCard from './components/RewardCard';
 import PointRequestCard from './components/PointRequestCard';
 import Modal from './components/Modal';
 import ProfileModal from './components/ProfileModal';
-import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, PencilIcon, TrashIcon } from './components/icons';
+import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, PencilIcon, TrashIcon, LockIcon, RefreshCwIcon } from './components/icons';
 import AvatarDisplay from './components/AvatarDisplay';
 
+const DEFAULT_PIN = '6981';
+
 const App: React.FC = () => {
+  const resetStorage = useStorageReset();
+
   // Register service worker for PWA support
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -29,12 +33,80 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // PIN Authentication
+  const [pin, setPin] = useLocalStorage<string>('chore-champ-pin', DEFAULT_PIN);
+  const [enteredPin, setEnteredPin] = useState<string>('');
+  const [isPinLocked, setIsPinLocked] = useState<boolean>(false);
+  const [showPinModal, setShowPinModal] = useState<boolean>(false);
+  const [showChangePinModal, setShowChangePinModal] = useState<boolean>(false);
+  const [newPin, setNewPin] = useState<string>('');
+  const [confirmNewPin, setConfirmNewPin] = useState<string>('');
 
+  // Check if PIN is set on first load
+  useEffect(() => {
+    const storedPin = localStorage.getItem('chore-champ-pin');
+    if (!storedPin) {
+      // No PIN set, redirect to parent login
+      const parentUser = users.find(u => u.role === 'parent');
+      if (parentUser) {
+        setCurrentUserId(parentUser.id);
+      }
+    }
+  }, [users, setCurrentUserId]);
+
+  const validatePin = (entered: string): boolean => {
+    return entered === pin;
+  };
+
+  const handlePinLogin = () => {
+    if (validatePin(enteredPin)) {
+      // PIN is correct, allow access
+      setIsPinLocked(false);
+      setEnteredPin('');
+      setShowPinModal(false);
+    } else {
+      // PIN is incorrect
+      setIsPinLocked(true);
+      setEnteredPin('');
+      // Show error notification
+      const newNotification: Notification = {
+        id: Date.now(),
+        targetRole: 'parent',
+        message: 'Incorrect PIN. Please try again.',
+        timestamp: Date.now(),
+        read: false,
+      };
+      const notifications = useLocalStorage<Notification[]>('chore-champ-notifications', []);
+      notifications[0] = newNotification;
+    }
+  };
+
+  const handleChangePin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPin.length >= 4 && newPin.length <= 6 && newPin === confirmNewPin) {
+      setPin(newPin);
+      setNewPin('');
+      setConfirmNewPin('');
+      setShowChangePinModal(false);
+    } else {
+      alert('PIN must be 4-6 digits and match. Please try again.');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUserId(null);
+    setIsPinLocked(true);
+    setEnteredPin('');
+    setShowPinModal(true);
+  };
+
+  // Initialize users with PIN check
   const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', [
     { id: 1, name: 'Parent', role: 'parent', avatar: null, points: 0 },
     { id: 2, name: 'Alex', role: 'child', avatar: 'bot', points: 100 },
   ]);
-  const [currentUserId, setCurrentUserId] = useLocalStorage<number>('chore-champ-currentUser', 1);
+
+  const [currentUserId, setCurrentUserId] = useLocalStorage<number | null>('chore-champ-currentUser', null);
 
   const [chores, setChores] = useLocalStorage<Chore[]>('chore-champ-chores', [
     { id: 1, name: 'Tidy up your room', points: 20, status: ChoreStatus.Incomplete, requiresApproval: true, recurrence: ChoreRecurrence.Daily, assignedTo: 2, description: "Put all toys in the toy box, make your bed, and put dirty clothes in the hamper." },
@@ -77,10 +149,10 @@ const App: React.FC = () => {
   const [newUserRole, setNewUserRole] = useState<UserRole>('child');
 
 
-  const currentUser = useMemo(() => users.find(u => u.id === currentUserId)!, [users, currentUserId]);
+  const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId]);
   const childUsers = useMemo(() => users.filter(u => u.role === 'child'), [users]);
   const parentUsers = useMemo(() => users.filter(u => u.role === 'parent'), [users]);
-  
+
   const addNotification = useCallback((targetRole: UserRole, message: string) => {
     const newNotification: Notification = {
       id: Date.now(),
@@ -92,10 +164,116 @@ const App: React.FC = () => {
     setNotifications(prev => [newNotification, ...prev]);
   }, [setNotifications]);
 
+  // PIN modal component
+  const PinModal = () => {
+    if (!showPinModal || !isPinLocked) return null;
+
+    return (
+      <Modal isOpen={showPinModal} onClose={() => setShowPinModal(false)}>
+        <h2 className="text-2xl font-bold mb-4 text-slate-700 flex items-center gap-2">
+          <LockIcon className="w-6 h-6" />
+          Parent PIN Required
+        </h2>
+        <p className="text-slate-600 mb-4">Please enter the parent PIN to continue.</p>
+        <div className="flex gap-2 mb-6">
+          {[...Array(6)].map((_, i) => (
+            <input
+              key={i}
+              type="password"
+              maxLength={1}
+              value={enteredPin[i] || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (/^\d*$/.test(value) && value.length <= 6) {
+                  setEnteredPin(prev => prev + value);
+                }
+              }}
+              className="w-12 h-12 text-center text-xl font-bold border-2 border-slate-300 rounded-lg focus:border-sky-500 focus:outline-none"
+            />
+          ))}
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowPinModal(false)}
+            className="flex-1 bg-slate-200 text-slate-700 font-semibold py-3 px-4 rounded-lg hover:bg-slate-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handlePinLogin}
+            className="flex-1 bg-sky-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-sky-600 transition-colors"
+          >
+            Login
+          </button>
+          <button
+            onClick={() => setShowChangePinModal(true)}
+            className="flex-1 bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            Change PIN
+          </button>
+        </div>
+      </Modal>
+    );
+  };
+
+  // Change PIN modal component
+  const ChangePinModal = () => {
+    if (!showChangePinModal) return null;
+
+    return (
+      <Modal isOpen={showChangePinModal} onClose={() => setShowChangePinModal(false)}>
+        <h2 className="text-2xl font-bold mb-4 text-slate-700 flex items-center gap-2">
+          <LockIcon className="w-6 h-6" />
+          Change PIN
+        </h2>
+        <p className="text-slate-600 mb-4">Enter a new 4-6 digit PIN.</p>
+        <form onSubmit={handleChangePin} className="space-y-4">
+          <input
+            type="password"
+            maxLength={6}
+            value={newPin}
+            onChange={(e) => setNewPin(e.target.value)}
+            placeholder="New PIN"
+            className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 text-center text-xl font-bold tracking-widest"
+            required
+          />
+          <input
+            type="password"
+            maxLength={6}
+            value={confirmNewPin}
+            onChange={(e) => setConfirmNewPin(e.target.value)}
+            placeholder="Confirm New PIN"
+            className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 text-center text-xl font-bold tracking-widest"
+            required
+          />
+          <button type="submit" className="w-full bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-600 transition-colors">
+            Update PIN
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowChangePinModal(false)}
+            className="w-full bg-slate-200 text-slate-700 font-semibold py-3 px-4 rounded-lg hover:bg-slate-300 transition-colors"
+          >
+            Cancel
+          </button>
+        </form>
+      </Modal>
+    );
+  };
+
   const handleUserChange = (userId: number) => {
+    const selectedUser = users.find(u => u.id === userId);
+    if (selectedUser?.role === 'parent') {
+      // Parent users need PIN authentication
+      setIsPinLocked(true);
+      setEnteredPin('');
+      setShowPinModal(true);
+    } else {
+      // Non-parent users don't need PIN
+      setIsPinLocked(false);
+    }
     setCurrentUserId(userId);
     setIsNotificationsOpen(false); // Close notifications on user switch
-    const selectedUser = users.find(u => u.id === userId);
     if (selectedUser?.role === 'child' && activeView === View.Requests) {
       setActiveView(View.Chores);
     }
@@ -496,11 +674,18 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <Header
-        points={currentUser.points}
+        points={currentUser?.points || 0}
         currentUser={currentUser}
         allUsers={users}
         onUserChange={handleUserChange}
         onEditProfile={() => setIsProfileModalOpen(true)}
+        onLogout={handleLogout}
+        onResetData={() => {
+          if (window.confirm('Are you sure you want to wipe all data? This cannot be undone!')) {
+            resetStorage();
+            window.location.reload();
+          }
+        }}
         unreadNotificationsCount={unreadNotificationsCount}
         onToggleNotifications={handleToggleNotifications}
         isNotificationsOpen={isNotificationsOpen}

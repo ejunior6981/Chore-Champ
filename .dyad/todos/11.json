@@ -1,0 +1,45 @@
+{
+  "todos": [
+    {
+      "id": "1",
+      "content": "Update types.ts with new ChoreRecurrence, ChoreSchedule, ActivityEvent, ChildPIN",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "content": "Update App.tsx with new state for activityLog, childPINs, loginScreen, schedule fields",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "content": "Update ChoreCard.tsx with new badge components, extra chore styling, deny & retry",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "content": "Update PointRequestCard.tsx with Approve Less button and point adjustment modal",
+      "status": "completed"
+    },
+    {
+      "id": "5",
+      "content": "Create LoginScreen.tsx with PIN input and session management",
+      "status": "completed"
+    },
+    {
+      "id": "6",
+      "content": "Create ActivityLog.tsx with event cards, filters, icons",
+      "status": "completed"
+    },
+    {
+      "id": "7",
+      "content": "Update Header.tsx and icons.tsx for new UI elements",
+      "status": "completed"
+    },
+    {
+      "id": "8",
+      "content": "Verify with typecheck and build",
+      "status": "completed"
+    }
+  ],
+  "updatedAt": "2026-10-08T17:55:00.000Z"
+}

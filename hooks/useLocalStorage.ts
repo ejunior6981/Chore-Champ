@@ -29,3 +29,19 @@ export const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dis
 
   return [value, setValue];
 };
+
+export const useStorageReset = (): (() => void) => {
+  const resetStorage = () => {
+    const keys = [
+      'chore-champ-users',
+      'chore-champ-currentUser',
+      'chore-champ-chores',
+      'chore-champ-rewards',
+      'chore-champ-requests',
+      'chore-champ-notifications',
+      'chore-champ-pin',
+    ];
+    keys.forEach(key => localStorage.removeItem(key));
+  };
+  return resetStorage;
+};
