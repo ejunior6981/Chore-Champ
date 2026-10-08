@@ -42,17 +42,24 @@ const App: React.FC = () => {
   const [newPin, setNewPin] = useState<string>('');
   const [confirmNewPin, setConfirmNewPin] = useState<string>('');
 
-  // Check if PIN is set on first load
+  // Initialize users with PIN check
+  const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', [
+    { id: 1, name: 'Parent', role: 'parent', avatar: null, points: 0 },
+    { id: 2, name: 'Alex', role: 'child', avatar: 'bot', points: 100 },
+  ]);
+
+  const [currentUserId, setCurrentUserId] = useLocalStorage<number | null>('chore-champ-currentUser', null);
+
+  // Check if we need to set initial user after users are loaded
   useEffect(() => {
-    const storedPin = localStorage.getItem('chore-champ-pin');
-    if (!storedPin) {
-      // No PIN set, redirect to parent login
+    if (users.length > 0 && !currentUserId) {
+      // No current user set, default to parent
       const parentUser = users.find(u => u.role === 'parent');
       if (parentUser) {
         setCurrentUserId(parentUser.id);
       }
     }
-  }, [users, setCurrentUserId]);
+  }, [users, currentUserId, setCurrentUserId]);
 
   const validatePin = (entered: string): boolean => {
     return entered === pin;
@@ -76,8 +83,7 @@ const App: React.FC = () => {
         timestamp: Date.now(),
         read: false,
       };
-      const notifications = useLocalStorage<Notification[]>('chore-champ-notifications', []);
-      notifications[0] = newNotification;
+      setNotifications(prev => [newNotification, ...prev]);
     }
   };
 
@@ -99,14 +105,6 @@ const App: React.FC = () => {
     setEnteredPin('');
     setShowPinModal(true);
   };
-
-  // Initialize users with PIN check
-  const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', [
-    { id: 1, name: 'Parent', role: 'parent', avatar: null, points: 0 },
-    { id: 2, name: 'Alex', role: 'child', avatar: 'bot', points: 100 },
-  ]);
-
-  const [currentUserId, setCurrentUserId] = useLocalStorage<number | null>('chore-champ-currentUser', null);
 
   const [chores, setChores] = useLocalStorage<Chore[]>('chore-champ-chores', [
     { id: 1, name: 'Tidy up your room', points: 20, status: ChoreStatus.Incomplete, requiresApproval: true, recurrence: ChoreRecurrence.Daily, assignedTo: 2, description: "Put all toys in the toy box, make your bed, and put dirty clothes in the hamper." },
