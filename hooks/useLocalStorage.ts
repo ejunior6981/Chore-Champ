@@ -43,12 +43,19 @@ export const useStorageReset = (): (() => void) => {
       .filter(key => key.startsWith('chore-champ-'))
       .sort();
     
+    console.log('[RESET] Before reset - all keys:', allKeys);
+    
     // Remove keys that are NOT in the keep list
     const keysToRemove = allKeys.filter(key => !keysToKeep.includes(key));
+    console.log('[RESET] Keys to remove:', keysToRemove);
     
     keysToRemove.forEach(key => {
       localStorage.removeItem(key);
+      console.log(`[RESET] Removed: ${key}`);
     });
+    
+    console.log('[RESET] After reset - remaining keys:',
+      Object.keys(localStorage).filter(key => key.startsWith('chore-champ-')).sort());
   };
   return resetStorage;
 };
