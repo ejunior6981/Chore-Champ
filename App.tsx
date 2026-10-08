@@ -16,6 +16,16 @@ import AvatarDisplay from './components/AvatarDisplay';
 const DEFAULT_PIN = '6981';
 
 const App: React.FC = () => {
+  // Debug: Log localStorage keys on mount
+  useEffect(() => {
+    console.log('[DEBUG-RESET] App mounted. Current localStorage keys:');
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes('chore-champ')) {
+        console.log(`  ${key}: ${JSON.stringify(localStorage.getItem(key)).substring(0, 100)}...`);
+      }
+    });
+  }, []);
+
   const resetStorage = useStorageReset();
 
   // Register service worker for PWA support
@@ -679,9 +689,14 @@ const App: React.FC = () => {
         onEditProfile={() => setIsProfileModalOpen(true)}
         onLogout={handleLogout}
         onResetData={() => {
+          console.log('[DEBUG-RESET] onResetData called');
           if (window.confirm('Are you sure you want to wipe all data? This cannot be undone!')) {
+            console.log('[DEBUG-RESET] Confirm clicked, calling resetStorage');
             resetStorage();
+            console.log('[DEBUG-RESET] reload triggered');
             window.location.reload();
+          } else {
+            console.log('[DEBUG-RESET] Cancel clicked');
           }
         }}
         unreadNotificationsCount={unreadNotificationsCount}
