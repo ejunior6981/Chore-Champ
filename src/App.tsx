@@ -130,9 +130,9 @@ function App() {
   };
 
   // Input sanitization helper
-  const sanitizeInput = (str: string): string => {
+  const sanitizeInput = (str: string, maxLength: number = 500): string => {
     if (!str) return '';
-    return String(str).replace(/[<>]/g, '').substring(0, 500);
+    return String(str).replace(/[<>]/g, '').substring(0, maxLength);
   };
 
   const sanitizeName = (str: string): string => {
@@ -552,7 +552,7 @@ function App() {
   const getScheduleTypeLabel = (scheduleType: ChoreScheduleType): string => {
     if (scheduleType === 'DEADLINE') return 'Deadline';
     if (scheduleType === 'DAILY') return 'Daily';
-    if (scheduleType === 'WEEKLY') return 'Weekly';
+    if (scheduleType === 'Weekly') return 'Weekly';
     return 'Unknown';
   };
 
@@ -1854,6 +1854,12 @@ function App() {
     if (chore.schedule.type === 'DAILY') return 'DAILY';
     if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
     return 'WEEKLY_DAYS';
+  };
+
+  // Handle open chore modal
+  const handleOpenChoreModal = (chore: Chore) => {
+    setShowChoreModal(true);
+    setEditingChore(chore);
   };
 
   // Get description for editing (string)

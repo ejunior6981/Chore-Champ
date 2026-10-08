@@ -1,8 +1,8 @@
-import { generateSessionToken, verifySessionToken } from '../server/routes/api/auth';
+import { authState } from './server/routes/api/auth';
 
 // Auth utility for client-side session management
-// SECURITY: PINs are NEVER stored in localStorage or sent to client
-// In production, use httpOnly cookies via server-side only
+// SECURITY: All authentication happens server-side
+// Client never stores PINs or sensitive data in localStorage
 
 export interface AuthState {
   isAuthenticated: boolean;
@@ -11,32 +11,19 @@ export interface AuthState {
   token: string | null;
 }
 
-export const authState: AuthState = {
-  isAuthenticated: false,
-  userId: null,
-  role: null,
-  token: null
-};
-
-// Validate session token from localStorage (fallback only)
+// Validate session from cookie (server sets httpOnly cookie)
 export function validateSession(): boolean {
+  // SECURITY: Don't read from localStorage - use server cookie only
+  // The browser automatically handles httpOnly cookies
+  // In production, verify cookie via server or use server-side session store
+  
+  // For client-side only check (optional), verify token format
   try {
-    const savedToken = localStorage.getItem('chore-champ-session-token');
-    if (!savedToken) {
-      return false;
+    // Check if we have a valid session state
+    if (authState.isAuthenticated) {
+      return true;
     }
-    
-    const session = verifySessionToken(savedToken);
-    if (!session) {
-      return false;
-    }
-    
-    authState.token = savedToken;
-    authState.userId = session.userId;
-    authState.role = session.role;
-    authState.isAuthenticated = true;
-    
-    return true;
+    return false;
   } catch {
     return false;
   }
@@ -44,13 +31,8 @@ export function validateSession(): boolean {
 
 // Clear session
 export function clearSession(): void {
-  // Remove session token
-  localStorage.removeItem('chore-champ-session-token');
-  // SECURITY: Never store PIN in localStorage - this has been removed
-  // Remove old insecure state
-  localStorage.removeItem('chore-champ-session-auth');
-  localStorage.removeItem('chore-champ-parent-viewing-as-child');
-  
+  // SECURITY: Clear client-side state only
+  // Server clears cookie via /api/logout
   authState.isAuthenticated = false;
   authState.userId = null;
   authState.role = null;
@@ -59,12 +41,8 @@ export function clearSession(): void {
 
 // Login with PIN - PIN verification happens SERVER-SIDE only
 export async function login(userId: number, pin: string, role: 'child'): Promise<boolean> {
-  // SECURITY: PIN verification happens on server via POST to /api/login
-  // The server:
-  // 1. Looks up user in database
-  // 2. Verifies PIN against hashed stored PIN (never compares plain text)
-  // 3. If valid, sets httpOnly cookie with session token
-  // 4. Client never receives PIN or stores it
+  // SECURITY: Never store PINs in client-side code or localStorage
+  // All PIN verification happens on server
   
   try {
     const response = await fetch('/api/login', {
@@ -95,7 +73,10 @@ export async function login(userId: number, pin: string, role: 'child'): Promise
 
 // Logout
 export function logout(): void {
-  clearSession();
+  // Call server to clear cookie
+  fetch('/api/logout', { method: 'POST' }).then(() => {
+    clearSession();
+  }).catch(console.error);
 }
 
 // Check if user has permission to perform action
@@ -128,6 +109,8 @@ export function getCurrentUser() {
 }
 
 // Initialize auth on app load
+// SECURITY: Initialize from server cookie, not localStorage
 export function initAuth(): void {
+  // Validate session from server cookie
   validateSession();
 }

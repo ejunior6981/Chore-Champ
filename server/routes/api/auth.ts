@@ -1,5 +1,4 @@
-import { getCookie, setCookie } from 'h3';
-import { sign, verify } from 'oauth4webapi';
+import { getCookie, setCookie } from 'nitro/h3';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 
@@ -55,7 +54,7 @@ io.on('connection', (socket) => {
     if (session) {
       socket.userId = session.userId;
       socket.role = session.role;
-      sessions.set(token, { ...session });
+      sessions.set(token, { ...session, createdAt: Date.now() });
       socket.join(`user:${session.userId}`);
       socket.emit('auth-success', { userId: session.userId, role: session.role });
       console.log(`User ${session.role} authenticated with token ${token.substring(0, 8)}...`);

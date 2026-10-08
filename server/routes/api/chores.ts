@@ -1,4 +1,4 @@
-import { getCookie, readBody, sendRedirect, setCookie } from 'h3';
+import { getCookie, readBody, sendRedirect, setCookie } from 'nitro/h3';
 import { verifySessionToken } from './auth';
 import { Chore, Child, User, ActivityEvent } from '../../types';
 
@@ -20,7 +20,6 @@ function checkRateLimit(key: string): boolean {
   if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
     return false;
   }
-  
   record.count++;
   return true;
 }

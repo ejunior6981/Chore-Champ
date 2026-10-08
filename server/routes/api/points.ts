@@ -1,4 +1,4 @@
-import { getCookie, readBody, sendRedirect } from 'h3';
+import { getCookie, readBody, sendRedirect } from 'nitro/h3';
 import { verifySessionToken } from './auth';
 
 // Rate limiting storage
@@ -19,7 +19,6 @@ function checkRateLimit(key: string): boolean {
   if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
     return false;
   }
-  
   record.count++;
   return true;
 }
