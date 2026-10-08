@@ -240,7 +240,7 @@ const ChoreCard: React.FC<ChoreCardProps> = ({ chore, onStateChange, currentUser
 
         {chore.status === ChoreStatus.RetryRequested && (
           <div className="text-center">
-            <p className="text-blue-700 font-semibold mb-2 text-sm">Retry Requested</p>
+            <p className="text-blue-700 font-semibold mb-2 text-sm">The chore was not complete. Please complete the chore and submit.</p>
             {currentUser.role === 'parent' && (
               <div className="flex space-x-2">
                 <button
