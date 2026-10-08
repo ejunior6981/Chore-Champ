@@ -19,7 +19,7 @@ function checkRateLimit(key: string): boolean {
   let record = rateLimitMap.get(key);
   
   if (!record || record.resetTime < now) {
-    rateLimitMap.set(key, { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    rateLimitMap.set(key, { key, count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS });
     return true;
   }
   
@@ -151,7 +151,7 @@ export async function onRequestDeleteChores(event: any, params: { params: { id: 
   
   // SECURITY FIX #4: Verify ownership before deleting chore
   // In production, fetch chore from database and verify ownership
-  const choreId = parseInt(params.id, 10);
+  const choreId = parseInt(params.params.id, 10);
   
   if (isNaN(choreId)) {
     return new Response(JSON.stringify({ error: 'Invalid chore ID' }), {

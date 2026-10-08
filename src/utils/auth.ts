@@ -12,6 +12,13 @@ export interface AuthState {
   token: string | null;
 }
 
+let authState: AuthState = {
+  isAuthenticated: false,
+  userId: null,
+  role: null,
+  token: null
+};
+
 // Validate session from cookie (server sets httpOnly cookie)
 export function validateSession(): boolean {
   // SECURITY: Don't read from localStorage - use server cookie only

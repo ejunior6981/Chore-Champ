@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { createHmac } from 'node:crypto';
 
 // Auth utility for server-side session management
 // Generates and verifies session tokens with HMAC signing

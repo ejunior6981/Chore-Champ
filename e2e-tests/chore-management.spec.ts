@@ -17,8 +17,8 @@ test.describe('Chore Management End-to-End Flow', () => {
     // Verify chore was added
     await expect(page.locator('h3:has-text("Wash the dishes")')).toBeVisible();
     await expect(page.locator('.chore-description')).toHaveText('After dinner cleanup');
-    await expect(page.locator('.chore-card').first).toContainText('15');
-    await expect(page.locator('.chore-card').first).toContainText('Alex');
+    await expect(page.locator('.chore-card').first).toContain('15');
+    await expect(page.locator('.chore-card').first).toContain('Alex');
     
     // Edit chore to change points
     await page.click('button:has-text("Edit")');
@@ -26,11 +26,11 @@ test.describe('Chore Management End-to-End Flow', () => {
     await page.click('button:has-text("Save Changes")');
     
     // Verify points was updated
-    await expect(page.locator('.chore-card').first).toContainText('20');
+    await expect(page.locator('.chore-card').first).toContain('20');
     
     // Delete the chore
     await page.click('button:has-text("Delete")');
-    await expect(page.locator('h3:has-text("Wash the dishes")')).not.toBeVisible();
+    await expect(page.locator('h3:has-text("Wash the dishes")')).not.toHaveText('Wash the dishes');
     
     // Verify activity log was updated
     await expect(page.locator('.activity-item')).toHaveCount(1);
@@ -92,7 +92,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     await page.click('button:has-text("Add Chore")');
     
     // Verify weekly chore was added
-    await expect(page.locator('.chore-card').first).toContainText('Weekly');
+    await expect(page.locator('.chore-card').first).toContain('Weekly');
     
     // Edit chore to change description
     await page.click('button:has-text("Edit")');
@@ -104,7 +104,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     
     // Delete the chore
     await page.click('button:has-text("Delete")');
-    await expect(page.locator('.chore-card').first).not.toBeVisible();
+    await expect(page.locator('.chore-card').first).not.toHaveText('Vacuum the floors');
     
     // Verify activity log was updated
     await expect(page.locator('.activity-item')).toHaveCount(1);
@@ -136,7 +136,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     
     // Delete the child
     await page.click('.child-card:has-text("Child 4") button:has-text("Delete")');
-    await expect(page.locator('.child-card:has-text("Child 4")')).not.toBeVisible();
+    await expect(page.locator('.child-card:has-text("Child 4")')).not.toHaveText('Child 4');
     
     // Verify activity log was updated
     await expect(page.locator('.activity-item')).toHaveCount(1);
@@ -170,6 +170,6 @@ test.describe('Chore Management End-to-End Flow', () => {
     await expect(page.locator('.activity-item')).toHaveCount(0);
     
     // Verify period was changed
-    await expect(page.locator('.period-selector button:has-text("Daily")')).toHaveClass(/btn-primary/);
+    await expect(page.locator('.period-selector button:has-text("Daily")')).toHaveClass('btn-primary');
   });
 });

@@ -18,7 +18,7 @@ function checkRateLimit(key: string): boolean {
   let record = rateLimitMap.get(key);
   
   if (!record || record.resetTime < now) {
-    rateLimitMap.set(key, { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    rateLimitMap.set(key, { key, count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS });
     return true;
   }
   
