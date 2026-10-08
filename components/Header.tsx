@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { StarIcon, BellIcon, ChevronDownIcon } from './icons';
 import { User, Notification } from '../types';
@@ -16,9 +15,24 @@ interface HeaderProps {
   isNotificationsOpen: boolean;
   notifications: Notification[];
   onClearNotifications: () => void;
+  isParentViewingAsChild?: boolean;
+  onReturnToParent?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserChange, onEditProfile, unreadNotificationsCount, onToggleNotifications, isNotificationsOpen, notifications, onClearNotifications }) => {
+const Header: React.FC<HeaderProps> = ({
+  points,
+  currentUser,
+  allUsers,
+  onUserChange,
+  onEditProfile,
+  unreadNotificationsCount,
+  onToggleNotifications,
+  isNotificationsOpen,
+  notifications,
+  onClearNotifications,
+  isParentViewingAsChild = false,
+  onReturnToParent
+}) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -40,13 +54,31 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
   return (
     <header className="bg-gradient-to-r from-sky-500 to-indigo-500 text-white shadow-lg sticky top-0 z-40">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-          Chore Champ
-        </h1>
+        <div className="flex items-center space-x-3">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Chore Champ
+          </h1>
+          {isParentViewingAsChild && (
+            <span className="hidden sm:inline-block bg-pink-500 text-white text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider animate-pulse">
+              Parent View Mode
+            </span>
+          )}
+        </div>
         <div className="flex items-center space-x-2 sm:space-x-4">
+            {isParentViewingAsChild && (
+              <button
+                onClick={onReturnToParent}
+                className="bg-white text-indigo-600 font-bold text-xs sm:text-sm px-3 py-1.5 rounded-lg shadow-md hover:bg-indigo-50 active:bg-indigo-100 transition-all flex items-center space-x-1"
+              >
+                <span>← Return to Parent</span>
+              </button>
+            )}
+
             <div className="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2">
                 <StarIcon className="w-6 h-6 sm:w-8 sm:h-8 text-amber-300" />
-                <span className="text-2xl sm:text-3xl font-bold text-white">{currentUser.role === 'child' ? points : '–'}</span>
+                <span className="text-2xl sm:text-3xl font-bold text-white">
+                  {currentUser.role === 'child' || isParentViewingAsChild ? points : '–'}
+                </span>
             </div>
             
             <div className="relative">
@@ -95,7 +127,20 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                                     </button>
                                 </li>
                             ))}
-                             {currentUser.role === 'child' && (
+                            {isParentViewingAsChild && onReturnToParent && (
+                              <>
+                                <hr className="my-1" />
+                                <li>
+                                  <button
+                                    onClick={() => { onReturnToParent(); setIsUserMenuOpen(false); }}
+                                    className="w-full text-left p-3 text-pink-600 font-bold hover:bg-pink-50 transition-colors"
+                                  >
+                                    Return to Parent View
+                                  </button>
+                                </li>
+                              </>
+                            )}
+                            {(currentUser.role === 'child' || isParentViewingAsChild) && (
                                 <>
                                     <hr className="my-1" />
                                      <li>
