@@ -5,12 +5,25 @@ import dyadComponentTagger from '@dyad-sh/react-vite-component-tagger';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    
     return {
       server: {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [dyadComponentTagger(), react()],
+      plugins: [
+        dyadComponentTagger(),
+        react(),
+        // Copy service worker to dist
+        {
+          name: 'copy-service-worker',
+          enforce: 'post',
+          closeBundle: false,
+          generateBundle() {
+            this.copy('public/sw.js', 'sw.js');
+          }
+        }
+      ],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
@@ -19,6 +32,20 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      // PWA build optimizations
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+            }
+          }
+        },
+        copyPublicDir: true,
+        // Ensure service worker is copied
+        outDir: 'dist',
+        assetsDir: 'assets'
       }
     };
 });

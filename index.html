@@ -6,27 +6,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chore Champ</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="manifest" href="data:application/manifest+json,{
-      &quot;name&quot;: &quot;Chore Champ&quot;,
-      &quot;short_name&quot;: &quot;ChoreChamp&quot;,
-      &quot;start_url&quot;: &quot;.&quot;,
-      &quot;display&quot;: &quot;standalone&quot;,
-      &quot;background_color&quot;: &quot;#f0f9ff&quot;,
-      &quot;theme_color&quot;: &quot;#0ea5e9&quot;,
-      &quot;description&quot;: &quot;A chore reward system for children.&quot;,
-      &quot;icons&quot;: [
-        {
-          &quot;src&quot;: &quot;https://picsum.photos/192/192&quot;,
-          &quot;sizes&quot;: &quot;192x192&quot;,
-          &quot;type&quot;: &quot;image/png&quot;
-        },
-        {
-          &quot;src&quot;: &quot;https://picsum.photos/512/512&quot;,
-          &quot;sizes&quot;: &quot;512x512&quot;,
-          &quot;type&quot;: &quot;image/png&quot;
-        }
-      ]
-    }">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <script>
+      // Handle push notification clicks
+      if ('Notification' in window) {
+        window.addEventListener('push', event => {
+          const data = event.data ? JSON.parse(event.data.text()) : {};
+          const options = {
+            body: data.body || 'You have a new notification!',
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            tag: 'chore-champ',
+            vibrate: [100, 50, 100],
+            data: {
+              url: '/',
+              ...data
+            }
+          };
+          event.waitUntil(
+            new Notification(data.title || 'Chore Champ', options)
+          );
+        });
+
+        window.addEventListener('notificationclick', event => {
+          event.notification.close();
+          event.waitUntil(
+            clients.openWindow('/')
+          );
+        });
+      }
+    </script>
     <style>
       body {
         -webkit-tap-highlight-color: transparent;

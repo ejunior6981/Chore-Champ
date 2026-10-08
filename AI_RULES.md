@@ -9,6 +9,8 @@
 - **Lucide React** for iconography
 - **Vite** as the build tool and dev server
 - **Supabase** or **Neon** as database providers (via Nitro server layer when needed)
+- **PWA** with service worker for offline support and installability
+- **Push Manager API** for browser push notifications (no external library needed)
 
 ## Library Usage Rules
 
@@ -36,6 +38,13 @@
 - Enable Nitro server layer only when needed (API routes, database clients, secrets, webhooks)
 - For database operations, use the chosen provider (Supabase/Neon) — Nitro may already be in place with Neon
 - Keep server-side code minimal and focused on its specific purpose
+
+### PWA & Push Notifications
+- Use **native Push Manager API** for push notifications (no external library needed)
+- Service worker should be registered in the app component or via client-side code
+- Push notification data should be sent to the service worker via the push event
+- Handle notification clicks to open the app or specific pages
+- Service worker handles push events, not the main app thread
 
 ### Component Architecture
 - Create small, focused components

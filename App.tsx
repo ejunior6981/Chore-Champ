@@ -13,6 +13,60 @@ import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, P
 import AvatarDisplay from './components/AvatarDisplay';
 
 const App: React.FC = () => {
+  // Register service worker for PWA support
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('SW registered:', registration);
+          })
+          .catch(error => {
+            console.log('SW registration failed:', error);
+          });
+      });
+    }
+  }, []);
+
+  // Request notification permission and handle push subscription
+  useEffect(() => {
+    // Request permission on initial load (optional - can be triggered by user)
+    const requestNotificationPermission = async () => {
+      if ('Notification' in window && Notification.permission === 'default') {
+        // Don't auto-request permission - let user choose when needed
+        // Uncomment below if you want to auto-request:
+        // const permission = await Notification.requestPermission();
+        // if (permission === 'granted') {
+        //   subscribeToPush();
+        // }
+      }
+    };
+
+    requestNotificationPermission();
+
+    // Listen for push subscription changes
+    window.addEventListener('push', handlePushSubscriptionChange);
+
+    return () => {
+      window.removeEventListener('push', handlePushSubscriptionChange);
+    };
+  }, []);
+
+  const handlePushSubscriptionChange = async (event: PushEvent) => {
+    const subscription = event.waitUntil(event.request.subscription);
+    console.log('Push subscription changed:', subscription);
+
+    // Send subscription to backend if you have one
+    // await sendSubscriptionToBackend(subscription);
+  };
+
+  // Handle push notification clicks
+  const handleNotificationClick = async (event: NotificationEvent) => {
+    event.waitUntil(
+      clients.openWindow('/')
+    );
+  };
+
   const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', [
     { id: 1, name: 'Parent', role: 'parent', avatar: null, points: 0 },
     { id: 2, name: 'Alex', role: 'child', avatar: 'bot', points: 100 },
