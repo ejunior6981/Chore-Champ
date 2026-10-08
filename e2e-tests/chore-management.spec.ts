@@ -16,9 +16,9 @@ test.describe('Chore Management End-to-End Flow', () => {
     
     // Verify chore was added
     await expect(page.locator('h3:has-text("Wash the dishes")')).toBeVisible();
-    await expect(page.locator('.chore-description')).toContainText('After dinner cleanup');
-    await expect(page.locator('.chore-card').first).toContainText('15');
-    await expect(page.locator('.chore-card').first).toContainText('Alex');
+    await expect(page.locator('.chore-description')).toContain('After dinner cleanup');
+    await expect(page.locator('.chore-card').first).toContain('15');
+    await expect(page.locator('.chore-card').first).toContain('Alex');
     
     // Edit chore to change points
     await page.click('button:has-text("Edit")');
@@ -35,8 +35,8 @@ test.describe('Chore Management End-to-End Flow', () => {
     // Verify activity log was updated
     await expect(page.locator('.activity-item')).toHaveCount(1);
     const activityItem = page.locator('.activity-item');
-    await expect(activityItem).toContainText('Approved');
-    await expect(activityItem).toContainText('Alex');
+    await expect(activityItem).toContain('Approved');
+    await expect(activityItem).toContain('Alex');
   });
 
   test('extra chore with completion limits works correctly', async ({ page }) => {
@@ -58,7 +58,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     await expect(page.locator('.badge:has-text("Extra Chore")')).toBeVisible();
     
     // Verify limit counter is displayed
-    await expect(page.locator('.meta-item:has-text("Limit:")')).toContainText('0/1');
+    await expect(page.locator('.meta-item:has-text("Limit:")')).toContain('0/1');
     
     // Complete the chore once
     await page.click('button:has-text("Complete")');
@@ -67,11 +67,11 @@ test.describe('Chore Management End-to-End Flow', () => {
     await expect(page.locator('.chore-card.completed')).toBeVisible();
     
     // Verify counter updated
-    await expect(page.locator('.meta-item:has-text("Limit:")')).toContainText('1/1');
+    await expect(page.locator('.meta-item:has-text("Limit:")')).toContain('1/1');
     
     // Try to complete again - should be blocked
     await page.click('button:has-text("Complete")');
-    await expect(page.locator('.alert')).toContainText('Please wait until the next period');
+    await expect(page.locator('.alert')).toContain('Please wait until the next period');
     
     // Delete the chore
     await page.click('button:has-text("Delete")');
@@ -100,7 +100,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     await page.click('button:has-text("Save Changes")');
     
     // Verify description was updated
-    await expect(page.locator('.chore-description')).toContainText('Keep floors clean and tidy');
+    await expect(page.locator('.chore-description')).toContain('Keep floors clean and tidy');
     
     // Delete the chore
     await page.click('button:has-text("Delete")');
@@ -132,7 +132,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     await page.click('button:has-text("Add Chore")');
     
     // Verify chore was assigned to Child 4
-    await expect(page.locator('.meta-item:has-text("Assigned:")')).toContainText('Child 4');
+    await expect(page.locator('.meta-item:has-text("Assigned:")')).toContain('Child 4');
     
     // Delete the child
     await page.click('.child-card:has-text("Child 4") button:has-text("Delete")');
@@ -156,7 +156,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     
     // Verify chore was added
     await expect(page.locator('h3:has-text("Test chore")')).toBeVisible();
-    await expect(page.locator('.chore-description')).toContainText('Test description');
+    await expect(page.locator('.chore-description')).toContain('Test description');
     
     // Change period
     await page.click('button:has-text("Change Period")');
@@ -164,7 +164,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     
     // Verify chores were reset
     await expect(page.locator('h3:has-text("Test chore")')).not.toBeVisible();
-    await expect(page.locator('.chore-list p')).toContainText('No chores yet');
+    await expect(page.locator('.chore-list p')).toContain('No chores yet');
     
     // Verify activity log was reset
     await expect(page.locator('.activity-item')).toHaveCount(0);

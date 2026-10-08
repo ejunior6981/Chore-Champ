@@ -28,6 +28,14 @@ export interface User {
   name: string;
   age: number;
   role: 'parent' | 'child';
+  // PIN is never stored in localStorage or sent to client
+  // PIN verification happens server-side only
+}
+
+// Session token for authentication
+export interface SessionToken {
+  token: string;
+  expiresAt: number;
 }
 
 export type Period = 'weekly' | 'daily' | 'monthly';
