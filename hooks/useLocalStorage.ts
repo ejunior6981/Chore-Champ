@@ -32,42 +32,14 @@ export const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dis
 
 export const useStorageReset = (): (() => void) => {
   const resetStorage = () => {
-    // Verify localStorage is available
-    if (!('localStorage' in window)) {
-      console.error('[DEBUG-RESET] localStorage is not available!');
-      return;
-    }
-    
     // Get ALL chore-champ keys
     const allKeys = Object.keys(localStorage)
       .filter(key => key.startsWith('chore-champ-'))
       .sort();
     
-    console.log('[DEBUG-RESET] Starting reset with keys:', allKeys);
-    
-    let success = true;
     allKeys.forEach(key => {
-      try {
-        const currentValue = localStorage.getItem(key);
-        console.log(`[DEBUG-RESET] Removing: ${key}`, currentValue ? '...' : '(empty)');
-        localStorage.removeItem(key);
-        const afterRemoval = localStorage.getItem(key);
-        console.log(`[DEBUG-RESET] After removal: ${key} = ${afterRemoval}`);
-        if (afterRemoval !== null) {
-          console.error(`[DEBUG-RESET] FAILED to remove ${key}!`);
-          success = false;
-        }
-      } catch (e) {
-        console.error(`[DEBUG-RESET] Error removing ${key}:`, e);
-        success = false;
-      }
+      localStorage.removeItem(key);
     });
-    
-    if (success) {
-      console.log('[DEBUG-RESET] Reset complete - all keys cleared');
-    } else {
-      console.error('[DEBUG-RESET] Reset failed - some keys could not be cleared');
-    }
   };
   return resetStorage;
 };
