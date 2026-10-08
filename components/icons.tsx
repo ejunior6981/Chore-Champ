@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 
 export const StarIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -70,7 +69,7 @@ export const InformationCircleIcon: React.FC<React.SVGProps<SVGSVGElement>> = (p
 );
 
 export const ChevronDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
   </svg>
 );
@@ -123,5 +122,11 @@ export const LogoutIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 export const RefreshCwIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.181-3.183m-11.664 0l-3.181 3.183" />
+    </svg>
+);
+
+export const RocketIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.92A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-11.926-4.72a14.668 14.668 0 005.801 2.58m4.713-12.92a14.689 14.689 0 01-5.967 2.313M17 8.5h1m-4-4v1m-3 3h1m-4 0h-1m3 3V3m-1.5 1.5a2.25 2.25 0 10-4.5 0 2.25 2.25 0 004.5 0z" />
     </svg>
 );

@@ -1,0 +1,64 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chore Champ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <script>
+      // Handle push notification clicks
+      if ('Notification' in window) {
+        window.addEventListener('push', event => {
+          const data = event.data ? JSON.parse(event.data.text()) : {};
+          const options = {
+            body: data.body || 'You have a new notification!',
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            tag: 'chore-champ',
+            vibrate: [100, 50, 100],
+            data: {
+              url: '/',
+              ...data
+            }
+          };
+          event.waitUntil(
+            new Notification(data.title || 'Chore Champ', options)
+          );
+        });
+
+        window.addEventListener('notificationclick', event => {
+          event.notification.close();
+          event.waitUntil(
+            clients.openWindow('/')
+          );
+        });
+      }
+    </script>
+    <style>
+      body {
+        -webkit-tap-highlight-color: transparent;
+      }
+    </style>
+
+<link rel="stylesheet" href="/index.css">
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^0.14.0"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/assets/index-Bz6T9vhX.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/vendor-DfSJUp79.js">
+</head>
+  <body class="bg-sky-50 antialiased text-slate-800">
+    <div id="root"></div>
+  </body>
+</html>

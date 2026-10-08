@@ -4,13 +4,13 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, User } from './types';
 import type { Notification } from './types';
 import { useLocalStorage, useStorageReset } from './hooks/useLocalStorage';
-import Header from './components/Header';
-import ChoreCard from './components/ChoreCard';
-import RewardCard from './components/RewardCard';
+import MissionControlHeader from './components/MissionControlHeader/MissionControlHeader';
+import MissionBrief from './components/MissionBrief/MissionBrief';
+import RewardsVault from './components/RewardsVault/RewardsVault';
 import PointRequestCard from './components/PointRequestCard';
 import Modal from './components/Modal';
 import ProfileModal from './components/ProfileModal';
-import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, PencilIcon, TrashIcon, LockIcon, RefreshCwIcon } from './components/icons';
+import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, PencilIcon, TrashIcon, LockIcon, RefreshCwIcon, RocketIcon } from './components/icons';
 import AvatarDisplay from './components/AvatarDisplay';
 
 const DEFAULT_PIN = '6981';
@@ -32,6 +32,10 @@ const App: React.FC = () => {
       });
     }
   }, []);
+
+  // Orb pulse intensity based on pending chores (would be passed as prop)
+  const pendingChores = 0;
+  const pulseIntensity = Math.min(pendingChores * 2, 100);
 
   // PIN Authentication
   const [pin, setPin] = useLocalStorage<string>('chore-champ-pin', DEFAULT_PIN);
@@ -660,8 +664,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header
+    <div className="min-h-screen flex flex-col font-sans bg-[#F3F4F6]">
+      <MissionControlHeader
         points={currentUser?.points || 0}
         currentUser={currentUser}
         allUsers={users}
@@ -681,24 +685,24 @@ const App: React.FC = () => {
         onClearNotifications={handleClearNotifications}
       />
       <main className="flex-grow container mx-auto p-4 pb-28">
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6">
+        <div className="bg-gradient-to-r from-[#1E3A5F] to-[#7C3AED]/80 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6">
           <div className="flex justify-center space-x-2 sm:space-x-4">
-            <button onClick={() => setActiveView(View.Chores)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 ${activeView === View.Chores ? 'bg-sky-500 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+            <button onClick={() => setActiveView(View.Chores)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 uppercase tracking-wide ${activeView === View.Chores ? 'bg-[#7C3AED] text-white shadow-md' : 'bg-white/10 text-slate-300 hover:bg-white/20'}`}>
               <StarIcon className="w-5 h-5" />
-              <span>Chores</span>
+              <span>Missions</span>
             </button>
-            <button onClick={() => setActiveView(View.Rewards)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 ${activeView === View.Rewards ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+            <button onClick={() => setActiveView(View.Rewards)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 uppercase tracking-wide ${activeView === View.Rewards ? 'bg-[#EC4899] text-white shadow-md' : 'bg-white/10 text-slate-300 hover:bg-white/20'}`}>
               <GiftIcon className="w-5 h-5" />
               <span>Rewards</span>
             </button>
             {currentUser.role === 'parent' && (
               <>
-                <button onClick={() => setActiveView(View.Requests)} className={`relative flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 ${activeView === View.Requests ? 'bg-rose-500 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+                <button onClick={() => setActiveView(View.Requests)} className={`relative flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 uppercase tracking-wide ${activeView === View.Requests ? 'bg-[#F97316] text-white shadow-md' : 'bg-white/10 text-slate-300 hover:bg-white/20'}`}>
                   <InboxArrowDownIcon className="w-5 h-5" />
                   <span>Requests</span>
-                  {pendingRequestsCount > 0 && <span className="absolute -top-2 -right-2 bg-rose-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">{pendingRequestsCount}</span>}
+                  {pendingRequestsCount > 0 && <span className="absolute -top-2 -right-2 bg-[#F97316] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">{pendingRequestsCount}</span>}
                 </button>
-                <button onClick={() => setActiveView(View.Users)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 ${activeView === View.Users ? 'bg-indigo-500 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+                <button onClick={() => setActiveView(View.Users)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 uppercase tracking-wide ${activeView === View.Users ? 'bg-[#7C3AED] text-white shadow-md' : 'bg-white/10 text-slate-300 hover:bg-white/20'}`}>
                   <UsersIcon className="w-5 h-5" />
                   <span>Family</span>
                 </button>
@@ -711,16 +715,17 @@ const App: React.FC = () => {
           {activeView === View.Chores && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sortedChores.map(chore => (
-                <ChoreCard key={chore.id} chore={chore} onStateChange={handleChoreStateChange} currentUser={currentUser} onEdit={handleOpenEditModal} onOverride={handleChoreOverride} />
+                <MissionBrief key={chore.id} chore={chore} onStateChange={handleChoreStateChange} currentUser={currentUser} onEdit={handleOpenEditModal} onOverride={handleChoreOverride} />
               ))}
             </div>
           )}
           {activeView === View.Rewards && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {rewards.map(reward => (
-                <RewardCard key={reward.id} reward={reward} userPoints={currentUser.points} onRedeem={handleRedeemReward} />
-              ))}
-            </div>
+            <RewardsVault
+              rewards={rewards}
+              userPoints={currentUser.points}
+              onRedeem={handleRedeemReward}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            />
           )}
           {activeView === View.Requests && currentUser?.role === 'parent' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -806,11 +811,14 @@ const App: React.FC = () => {
       <Modal isOpen={isModalOpen} onClose={closeModal}>
         {modalContent === 'addChore' && (
           <form onSubmit={handleAddChore}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Add New Chore</h2>
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+              <RocketIcon className="w-6 h-6 text-[#FBBF24]" />
+              Launch New Mission
+            </h2>
             <div className="space-y-4">
-              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Chore name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Description (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" rows={3}></textarea>
-              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required min="1" />
+              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Mission name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
+              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Mission details (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" rows={3}></textarea>
+              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Fuel points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required min="1" />
                <div className="flex items-center justify-between">
                 <label htmlFor="assignTo" className="text-slate-600 font-medium">Assign To:</label>
                 <select id="assignTo" value={newChoreAssignedTo} onChange={e => setNewChoreAssignedTo(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
@@ -829,20 +837,23 @@ const App: React.FC = () => {
                 </select>
               </div>
               <div className="flex items-center">
-                <input type="checkbox" id="requiresApproval" checked={newChoreRequiresApproval} onChange={e => setNewChoreRequiresApproval(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500" />
+                <input type="checkbox" id="requiresApproval" checked={newChoreRequiresApproval} onChange={e => setNewChoreRequiresApproval(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#7C3AED] focus:ring-[#7C3AED]" />
                 <label htmlFor="requiresApproval" className="ml-3 block text-sm font-medium text-slate-700">Requires parent approval</label>
               </div>
-              <button type="submit" className="w-full bg-blue-500 text-white p-3 rounded-md font-bold hover:bg-blue-600 transition-colors">Add Chore</button>
+              <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Launch Mission</button>
             </div>
           </form>
         )}
         {modalContent === 'editChore' && editingChore && (
           <form onSubmit={handleEditChore}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Edit Chore</h2>
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+              <RocketIcon className="w-6 h-6 text-[#FBBF24]" />
+              Edit Mission
+            </h2>
             <div className="space-y-4">
-              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Chore name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Description (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" rows={3}></textarea>
-              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required min="1" />
+              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Mission name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
+              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Mission details (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" rows={3}></textarea>
+              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Fuel points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required min="1" />
                <div className="flex items-center justify-between">
                 <label htmlFor="assignTo" className="text-slate-600 font-medium">Assign To:</label>
                 <select id="assignTo" value={newChoreAssignedTo} onChange={e => setNewChoreAssignedTo(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
@@ -861,25 +872,31 @@ const App: React.FC = () => {
                 </select>
               </div>
               <div className="flex items-center">
-                <input type="checkbox" id="requiresApproval" checked={newChoreRequiresApproval} onChange={e => setNewChoreRequiresApproval(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500" />
+                <input type="checkbox" id="requiresApproval" checked={newChoreRequiresApproval} onChange={e => setNewChoreRequiresApproval(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#7C3AED] focus:ring-[#7C3AED]" />
                 <label htmlFor="requiresApproval" className="ml-3 block text-sm font-medium text-slate-700">Requires parent approval</label>
               </div>
-              <button type="submit" className="w-full bg-sky-500 text-white p-3 rounded-md font-bold hover:bg-sky-600 transition-colors">Save Changes</button>
+              <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Save Changes</button>
             </div>
           </form>
         )}
         {modalContent === 'addReward' && (
           <form onSubmit={handleAddReward}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Add New Reward</h2>
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+              <GiftIcon className="w-6 h-6 text-[#EC4899]" />
+              Add New Reward
+            </h2>
             <input type="text" value={newRewardName} onChange={e => setNewRewardName(e.target.value)} placeholder="Reward name" className="w-full p-2 border rounded mb-2 bg-slate-50 text-slate-800" required />
-            <input type="number" value={newRewardPoints} onChange={e => setNewRewardPoints(e.target.value)} placeholder="Points cost" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required min="1" />
-            <button type="submit" className="w-full bg-green-500 text-white p-2 rounded font-bold hover:bg-green-600">Add Reward</button>
+            <input type="number" value={newRewardPoints} onChange={e => setNewRewardPoints(e.target.value)} placeholder="Fuel cost" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required min="1" />
+            <button type="submit" className="w-full bg-[#10B981] text-white p-2 rounded font-bold hover:bg-[#059669] uppercase tracking-wide">Add Reward</button>
           </form>
         )}
         {modalContent === 'addPoints' && (
           <form onSubmit={handleAddPoints}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Assign Points</h2>
-            <p className="mb-4 text-slate-600">Give extra points for a job well done or deduct points if needed (use a negative number).</p>
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+              <CogIcon className="w-6 h-6 text-[#F97316]" />
+              Assign Fuel
+            </h2>
+            <p className="mb-4 text-slate-600">Give extra fuel for a job well done or deduct if needed (use a negative number).</p>
             <div className="flex items-center justify-between mb-4">
               <label htmlFor="assignTo" className="text-slate-600 font-medium">For:</label>
                 <select id="assignTo" value={manualPointsUser} onChange={e => setManualPointsUser(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
@@ -888,22 +905,28 @@ const App: React.FC = () => {
                   ))}
                 </select>
             </div>
-            <input type="number" value={manualPoints} onChange={e => setManualPoints(e.target.value)} placeholder="Enter points (e.g., 50 or -10)" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required />
-            <button type="submit" className="w-full bg-purple-500 text-white p-2 rounded font-bold hover:bg-purple-600">Assign Points</button>
+            <input type="number" value={manualPoints} onChange={e => setManualPoints(e.target.value)} placeholder="Enter fuel points (e.g., 50 or -10)" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required />
+            <button type="submit" className="w-full bg-[#F97316] text-white p-2 rounded font-bold hover:bg-[#EA580C] uppercase tracking-wide">Assign Fuel</button>
           </form>
         )}
         {modalContent === 'requestPoints' && (
           <form onSubmit={handleRequestPoints}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Request Points</h2>
-            <p className="mb-4 text-slate-600">Did something extra? Describe what you did to earn more points!</p>
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+              <RocketIcon className="w-6 h-6 text-[#FBBF24]" />
+              Request Fuel
+            </h2>
+            <p className="mb-4 text-slate-600">Did something extra? Describe what you did to earn more fuel!</p>
             <textarea value={requestDescription} onChange={e => setRequestDescription(e.target.value)} placeholder="Description (e.g., cleaned the garage)" className="w-full p-2 border rounded mb-2 bg-slate-50 text-slate-800" required />
-            <input type="number" value={requestPoints} onChange={e => setRequestPoints(e.target.value)} placeholder="Points requested" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required min="1" />
-            <button type="submit" className="w-full bg-fuchsia-500 text-white p-2 rounded font-bold hover:bg-fuchsia-600">Send Request</button>
+            <input type="number" value={requestPoints} onChange={e => setRequestPoints(e.target.value)} placeholder="Fuel requested" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required min="1" />
+            <button type="submit" className="w-full bg-[#EC4899] text-white p-2 rounded font-bold hover:bg-[#BE185D] uppercase tracking-wide">Send Request</button>
           </form>
         )}
         {modalContent === 'addUser' && (
           <form onSubmit={handleAddUser}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Add Family Member</h2>
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+              <UsersIcon className="w-6 h-6 text-[#7C3AED]" />
+              Add Family Member
+            </h2>
             <div className="space-y-4">
                 <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
                 <div className="flex items-center justify-between">
@@ -913,13 +936,16 @@ const App: React.FC = () => {
                         <option value="parent">Parent</option>
                     </select>
                 </div>
-                <button type="submit" className="w-full bg-blue-500 text-white p-3 rounded-md font-bold hover:bg-blue-600 transition-colors">Add Member</button>
+                <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Add Member</button>
             </div>
           </form>
         )}
         {modalContent === 'editUser' && editingUser && (
           <form onSubmit={handleEditUser}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Edit {editingUser.name}</h2>
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+              <PencilIcon className="w-6 h-6 text-[#EC4899]" />
+              Edit {editingUser.name}
+            </h2>
             <div className="space-y-4">
                 <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
                 <div className="flex items-center justify-between">
@@ -929,8 +955,8 @@ const App: React.FC = () => {
                         <option value="parent">Parent</option>
                     </select>
                 </div>
-                <p className="text-xs text-slate-500">Changing a user's role will reset their points.</p>
-                <button type="submit" className="w-full bg-sky-500 text-white p-3 rounded-md font-bold hover:bg-sky-600 transition-colors">Save Changes</button>
+                <p className="text-xs text-slate-500">Changing a user's role will reset their fuel.</p>
+                <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Save Changes</button>
             </div>
           </form>
         )}
