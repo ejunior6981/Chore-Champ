@@ -3,7 +3,10 @@ const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/assets/*',
-  '/static/*'
+  '/static/*',
+  '/favicon.ico',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 // Install event - cache assets
@@ -42,16 +45,36 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Don't cache API responses, HTML responses with certain headers, or large resources
+  if (
+    event.request.method !== 'GET' ||
+    event.request.url.includes('/api/') ||
+    event.request.url.includes('/auth/') ||
+    event.request.url.includes('/socket/')
+  ) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       if (response) {
         return response;
       }
       return fetch(event.request).then((response) => {
-        // Don't cache 404s
-        if (response.status === 404) {
+        // Don't cache 404s, error responses, or responses without cache-control headers
+        if (!response || response.status === 404 || !response.ok) {
           return response;
         }
+
+        // Only cache responses with appropriate cache-control headers
+        const cacheControl = response.headers.get('cache-control');
+        const contentType = response.headers.get('content-type') || '';
+
+        // Don't cache API responses or HTML without explicit cache headers
+        if (contentType.includes('application/json') || !cacheControl) {
+          return response;
+        }
+
         const responseToCache = response.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseToCache);

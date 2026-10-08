@@ -1,7 +1,8 @@
 import { generateSessionToken, verifySessionToken } from '../server/routes/api/auth';
 
 // Auth utility for client-side session management
-// Note: In production, use httpOnly cookies via server-side only
+// SECURITY: PINs are NEVER stored in localStorage or sent to client
+// In production, use httpOnly cookies via server-side only
 
 export interface AuthState {
   isAuthenticated: boolean;
@@ -17,7 +18,7 @@ export const authState: AuthState = {
   token: null
 };
 
-// Validate session token from localStorage
+// Validate session token from localStorage (fallback only)
 export function validateSession(): boolean {
   try {
     const savedToken = localStorage.getItem('chore-champ-session-token');
@@ -43,7 +44,10 @@ export function validateSession(): boolean {
 
 // Clear session
 export function clearSession(): void {
+  // Remove session token
   localStorage.removeItem('chore-champ-session-token');
+  // SECURITY: Never store PIN in localStorage - this has been removed
+  // Remove old insecure state
   localStorage.removeItem('chore-champ-session-auth');
   localStorage.removeItem('chore-champ-parent-viewing-as-child');
   
@@ -53,15 +57,14 @@ export function clearSession(): void {
   authState.token = null;
 }
 
-// Login with PIN
+// Login with PIN - PIN verification happens SERVER-SIDE only
 export async function login(userId: number, pin: string, role: 'child'): Promise<boolean> {
-  // In production:
-  // 1. Send PIN to server
-  // 2. Server verifies PIN against hashed value in database
-  // 3. Server returns session token via httpOnly cookie
-  
-  // For now, simulate server verification
-  // In production, PIN should NEVER be sent to client or stored in localStorage
+  // SECURITY: PIN verification happens on server via POST to /api/login
+  // The server:
+  // 1. Looks up user in database
+  // 2. Verifies PIN against hashed stored PIN (never compares plain text)
+  // 3. If valid, sets httpOnly cookie with session token
+  // 4. Client never receives PIN or stores it
   
   try {
     const response = await fetch('/api/login', {
@@ -77,18 +80,11 @@ export async function login(userId: number, pin: string, role: 'child'): Promise
       return false;
     }
     
-    // Extract token from cookie header (in production, browser handles this automatically)
-    const token = response.headers.get('set-cookie')?.split('session-token=')[1]?.split(';')[0];
-    
-    if (token) {
-      authState.token = token;
-      authState.userId = userId;
-      authState.role = role;
-      authState.isAuthenticated = true;
-      
-      // Store for client-side fallback (in production, use httpOnly cookies)
-      localStorage.setItem('chore-champ-session-token', token);
-    }
+    // Browser automatically handles httpOnly cookies
+    // No need to manually store token in localStorage
+    authState.userId = userId;
+    authState.role = role;
+    authState.isAuthenticated = true;
     
     return true;
   } catch (error) {

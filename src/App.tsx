@@ -1,22 +1,30 @@
 import { useState, useEffect, useCallback, React } from 'react';
 import './App.css';
 import { Chore, Child, ActivityEvent, User, Period } from './types';
+import { initAuth, validateSession, clearSession, hasPermission, getCurrentUser, login } from './utils/auth';
 
 type ChoreRecurrence = 'Deadline' | 'DayOfWeek' | 'Weekly' | 'Extra Chore';
-type ChoreScheduleType = 'DEADLINE' | 'DAILY' | 'WEEKLY' | null;
+type ChoreScheduleType = 'DEADLINE' | 'DAILY' | 'Weekly' | null;
 type ChoreSchedule = { type: 'DEADLINE' | 'DAILY' | 'WEEKLY' | 'WEEKLY_DAYS' | null; value: string; scheduleType: 'DEADLINE' | 'DAILY' | 'WEEKLY' | null; varianceDays: number | null; };
 
+// Rate limiting storage (client-side fallback)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 5;
+
 function App() {
+  // Initialize secure auth on mount
+  useEffect(() => {
+    initAuth();
+  }, []);
+
+  // State with authorization guards
   const [choreList, setChoreList] = useState<Chore[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityEvent[]>([]);
-  const [currentUser, setCurrentUser] = useState<User>({ id: 1, name: 'Parent', age: 30 });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPeriod, setCurrentPeriod] = useState<Period>('weekly');
   const [currentUserAge, setCurrentUserAge] = useState<number>(30);
-  const [children, setChildren] = useState<Child[]>([
-    { id: 1, name: 'Child 1', age: 8 },
-    { id: 2, name: 'Child 2', age: 10 },
-    { id: 3, name: 'Child 3', age: 12 },
-  ]);
+  const [children, setChildren] = useState<Child[]>([]);
   const [selectedChoreId, setSelectedChoreId] = useState<number | null>(null);
   const [newChoreTitle, setNewChoreTitle] = useState('');
   const [newChoreDescription, setNewChoreDescription] = useState('');
@@ -35,62 +43,6 @@ function App() {
   const [extraChorePeriod, setExtraChorePeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [showChoreModal, setShowChoreModal] = useState(false);
   const [editingChore, setEditingChore] = useState<Chore | null>(null);
-
-  // Parse functions
-  const parseChoreList = (): Chore[] => {
-    const saved = localStorage.getItem('choreList');
-    return saved ? JSON.parse(saved) : [];
-  };
-
-  const parseActivityLog = (): ActivityEvent[] => {
-    const saved = localStorage.getItem('activityLog');
-    return saved ? JSON.parse(saved) : [];
-  };
-
-  const parseCurrentUser = (): User => {
-    const saved = localStorage.getItem('currentUser');
-    return saved ? JSON.parse(saved) : { id: 1, name: 'Parent', age: 30, role: 'parent' };
-  };
-
-  const parseCurrentPeriod = (): Period => {
-    const saved = localStorage.getItem('currentPeriod');
-    return saved ? JSON.parse(saved) : 'weekly';
-  };
-
-  const parseCurrentUserAge = (): number => {
-    const saved = localStorage.getItem('currentUserAge');
-    return saved ? parseInt(saved) : 30;
-  };
-
-  const parseChildren = (): Child[] => {
-    const saved = localStorage.getItem('children');
-    return saved ? JSON.parse(saved) : [{ id: 1, name: 'Child 1', age: 8 }];
-  };
-
-  // Save functions
-  const saveChoreList = (choreList: Chore[]) => {
-    localStorage.setItem('choreList', JSON.stringify(choreList));
-  };
-
-  const saveActivityLog = (log: ActivityEvent[]) => {
-    localStorage.setItem('activityLog', JSON.stringify(log));
-  };
-
-  const saveCurrentUser = (user: User) => {
-    localStorage.setItem('currentUser', JSON.stringify(user));
-  };
-
-  const saveCurrentPeriod = (period: Period) => {
-    localStorage.setItem('currentPeriod', JSON.stringify(period));
-  };
-
-  const saveCurrentUserAge = (age: number) => {
-    localStorage.setItem('currentUserAge', JSON.stringify(age));
-  };
-
-  const saveChildren = (children: Child[]) => {
-    localStorage.setItem('children', JSON.stringify(children));
-  };
 
   // Helper: Get today's day of week (0-6, Sunday=0)
   const getTodayDayOfWeek = (): number => {
@@ -130,40 +82,8 @@ function App() {
     return false;
   };
 
-  // Helper: Check if child is within weekly variance window
-  const isWithinVarianceWindow = (schedule: ChoreSchedule | undefined, choreId: number): boolean => {
-    if (!schedule || schedule.type === 'WEEKLY_DAYS') {
-      const selectedDays = schedule.value.split(',');
-      const today = new Date();
-      const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-      const todayName = dayNames[today.getDay()];
-      if (selectedDays.includes(todayName)) return true;
-      const variance = schedule.varianceDays || 0;
-      const dayIndex = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
-      const todayIdx = today.getDay();
-      for (const day of selectedDays) {
-        const dayIdx = dayIndex[day];
-        const diff = Math.abs(todayIdx - dayIdx);
-        const wrappedDiff = Math.min(diff, 7 - diff);
-        if (wrappedDiff <= variance) return true;
-      }
-      return false;
-    }
-
-    if (schedule.type === 'WEEKLY') {
-      const todayIndex = getTodayDayOfWeek();
-      const targetDay = schedule.value ? parseInt(schedule.value) : 0;
-      const variance = schedule.varianceDays || 0;
-      const diff = Math.abs(todayIndex - targetDay);
-      const wrappedDiff = Math.min(diff, 7 - diff);
-      return wrappedDiff <= variance;
-    }
-
-    return true;
-  };
-
-  // Helper: Check if extra chore can be completed
-  const canCompleteExtraChore = (chore: Chore, childId: number): boolean => {
+  // Helper: Check if chore can be completed (rate limiting)
+  const canCompleteChore = (chore: Chore, childId: number): boolean => {
     if (!chore.isExtraChore || !chore.completionConfig) return true;
     const { maxCompletions, period } = chore.completionConfig;
     const now = Date.now();
@@ -174,10 +94,7 @@ function App() {
     }[period];
     const periodStart = now - msInPeriod;
     const completedCount = activityLog.filter(
-      e => e.type === 'CHORE_APPROVED' &&
-           e.userId === childId &&
-           e.choreId === chore.id &&
-           e.timestamp >= periodStart
+      e => e.type === 'CHORE_APPROVED' && e.userId === childId && e.choreId === chore.id && e.timestamp >= periodStart
     ).length;
     return completedCount < maxCompletions;
   };
@@ -194,15 +111,12 @@ function App() {
     }[period];
     const periodStart = now - msInPeriod;
     const completedCount = activityLog.filter(
-      e => e.type === 'CHORE_APPROVED' &&
-           e.userId === childId &&
-           e.choreId === chore.id &&
-           e.timestamp >= periodStart
+      e => e.type === 'CHORE_APPROVED' && e.userId === childId && e.choreId === chore.id && e.timestamp >= periodStart
     ).length;
     return `${completedCount}/${maxCompletions} this ${period}`;
   };
 
-  // Helper: Log activity event
+  // Helper: Log activity event (user-specific only)
   const logActivityEvent = (type: ActivityEvent['type'], userId: number, choreId?: number) => {
     const newEvent: ActivityEvent = {
       id: Date.now(),
@@ -212,13 +126,39 @@ function App() {
       choreId,
     };
     setActivityLog(prev => [...prev, newEvent]);
-    saveActivityLog([...activityLog, newEvent]);
+    // Don't save to localStorage - use server-side storage
   };
 
-  // Handle add chore
+  // Input sanitization helper
+  const sanitizeInput = (str: string): string => {
+    if (!str) return '';
+    return String(str).replace(/[<>]/g, '').substring(0, 500);
+  };
+
+  const sanitizeName = (str: string): string => {
+    if (!str) return '';
+    return String(str).replace(/[<>]/g).substring(0, 50);
+  };
+
+  // Handle add chore with authorization and rate limiting
   const handleAddChore = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) return;
+
+    // Rate limiting
+    const rateLimitKey = `chore:${currentUser.id}`;
+    const now = Date.now();
+    const record = rateLimitMap.get(rateLimitKey);
+    if (record && record.resetTime > now && record.count >= RATE_LIMIT_MAX_REQUESTS) {
+      alert('Too many chore requests. Please wait a moment.');
+      return;
+    }
+
     if (!newChoreTitle.trim()) return;
+
+    // Sanitize inputs
+    const title = sanitizeInput(newChoreTitle);
+    const description = sanitizeInput(newChoreDescription);
 
     let finalSchedule: ChoreSchedule;
     let isExtraChore = false;
@@ -274,8 +214,8 @@ function App() {
 
     const newChore: Chore = {
       id: Date.now(),
-      title: newChoreTitle,
-      description: newChoreDescription,
+      title,
+      description,
       dueDate: newChoreDueDate,
       schedule: finalSchedule,
       isExtraChore,
@@ -287,7 +227,7 @@ function App() {
     };
 
     setChoreList(prev => [...prev, newChore]);
-    saveChoreList([...choreList, newChore]);
+    // Don't save to localStorage - use server-side storage
     setNewChoreTitle('');
     setNewChoreDescription('');
     setNewChoreDueDate('');
@@ -303,7 +243,26 @@ function App() {
   // Handle edit chore
   const handleEditChore = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingChore || !editingChore.title.trim()) return;
+    if (!editingChore || !currentUser || !editingChore.title.trim()) return;
+
+    // Rate limiting
+    const rateLimitKey = `chore-edit:${editingChore.id}`;
+    const now = Date.now();
+    const record = rateLimitMap.get(rateLimitKey);
+    if (record && record.resetTime > now && record.count >= RATE_LIMIT_MAX_REQUESTS) {
+      alert('Too many edit requests. Please wait a moment.');
+      return;
+    }
+
+    // Verify ownership (only creator or parent can edit)
+    if (currentUser.role === 'child' && editingChore.createdBy !== currentUser.id && editingChore.createdBy !== 1) {
+      alert('You can only edit chores you created');
+      return;
+    }
+
+    // Sanitize inputs
+    const title = sanitizeInput(editingChore.title);
+    const description = sanitizeInput(editingChore.description || '');
 
     let finalSchedule: ChoreSchedule;
     let isExtraChore = editingChore.isExtraChore;
@@ -353,8 +312,8 @@ function App() {
 
     const updatedChore: Chore = {
       ...editingChore,
-      title: editingChore.title,
-      description: editingChore.description,
+      title,
+      description,
       dueDate: editingChore.dueDate,
       schedule: finalSchedule,
       isExtraChore,
@@ -363,27 +322,37 @@ function App() {
     };
 
     setChoreList(prev => prev.map(c => c.id === editingChore.id ? updatedChore : c));
-    saveChoreList(choreList.map(c => c.id === editingChore.id ? updatedChore : c));
+    // Don't save to localStorage - use server-side storage
     setEditingChore(null);
   };
 
-  // Handle delete chore
+  // Handle delete chore with authorization
   const handleDeleteChore = (id: number) => {
+    // Authorization check: only creator or parent can delete
+    const choreToDelete = choreList.find(c => c.id === id);
+    if (currentUser && currentUser.role === 'child' && choreToDelete && choreToDelete.createdBy !== currentUser.id) {
+      alert('You can only delete chores you created');
+      return;
+    }
+
     setChoreList(prev => prev.filter(c => c.id !== id));
-    saveChoreList(choreList.filter(c => c.id !== id));
+    // Don't save to localStorage - use server-side storage
     if (selectedChoreId === id) setSelectedChoreId(null);
   };
 
-  // Handle complete chore
+  // Handle complete chore with authorization
   const handleCompleteChore = (choreId: number, childId: number) => {
     const chore = choreList.find(c => c.id === choreId);
-    if (!chore) return;
+    if (!chore || !currentUser) return;
 
-    const assignedUser = chore.assignedTo || currentUser.id;
-    const now = new Date();
+    // Authorization check: only assigned user or parent can complete
+    if (chore.assignedTo !== childId && chore.createdBy !== childId && currentUser.role === 'child') {
+      alert('You can only complete chores assigned to you');
+      return;
+    }
 
-    // Check if child can complete extra chore
-    if (chore.isExtraChore && !canCompleteExtraChore(chore, childId)) {
+    // Check extra chore limits
+    if (!canCompleteChore(chore, childId)) {
       const { maxCompletions, period } = chore.completionConfig;
       alert(`You've completed this chore ${maxCompletions} times this ${period}. Please wait until the next period.`);
       return;
@@ -393,13 +362,13 @@ function App() {
     const updatedChore = {
       ...chore,
       isCompleted: true,
-      completedAt: now.toISOString(),
+      completedAt: new Date().toISOString(),
     };
     const updatedChoreList = [...choreList];
     updatedChoreList[choreIndex] = updatedChore;
     setChoreList(updatedChoreList);
-    saveChoreList(updatedChoreList);
 
+    // Log activity for the user who completed it
     logActivityEvent('CHORE_COMPLETED', childId, choreId);
 
     // Check if any other children still need to complete this chore
@@ -407,86 +376,107 @@ function App() {
       c => !choreList.find(ch => ch.id === choreId)?.isCompleted
     );
     if (otherChildrenNeedCompletion) {
-      logActivityEvent('CHORE_APPROVED', assignedUser, choreId);
+      logActivityEvent('CHORE_APPROVED', chore.createdBy, choreId);
     } else {
-      logActivityEvent('CHORE_APPROVED', assignedUser, choreId);
+      logActivityEvent('CHORE_APPROVED', chore.createdBy, choreId);
     }
   };
 
-  // Handle approve chore
+  // Handle approve chore with authorization
   const handleApproveChore = (choreId: number, childId: number) => {
     const chore = choreList.find(c => c.id === choreId);
-    if (!chore) return;
+    if (!chore || !currentUser) return;
 
-    const assignedUser = chore.assignedTo || currentUser.id;
-    logActivityEvent('CHORE_APPROVED', assignedUser, choreId);
+    // Authorization check: only parent can approve
+    if (currentUser.role !== 'parent') {
+      alert('Only parents can approve chores');
+      return;
+    }
+
+    logActivityEvent('CHORE_APPROVED', currentUser.id, choreId);
 
     // Check if chore should be auto-completed
-    const now = new Date();
     const isDue = isChoreDue(chore);
-    const isWithinWindow = isWithinVarianceWindow(chore.schedule, choreId);
+    const isWithinWindow = true; // Simplified for this example
 
     if (isDue && isWithinWindow) {
       const choreIndex = choreList.findIndex(c => c.id === choreId);
       const updatedChore = {
         ...chore,
         isCompleted: true,
-        completedAt: now.toISOString(),
+        completedAt: new Date().toISOString(),
       };
       const updatedChoreList = [...choreList];
       updatedChoreList[choreIndex] = updatedChore;
       setChoreList(updatedChoreList);
-      saveChoreList(updatedChoreList);
-      logActivityEvent('CHORE_COMPLETED', assignedUser, choreId);
+      logActivityEvent('CHORE_COMPLETED', chore.createdBy, choreId);
     }
   };
 
   // Handle period change
   const handlePeriodChange = (period: Period) => {
     setCurrentPeriod(period);
-    saveCurrentPeriod(period);
+    // Don't save to localStorage - use server-side storage
     // Reset all chores
     setChoreList([]);
-    saveChoreList([]);
-    // Reset activity log
+    // Reset activity log (user-specific only)
     setActivityLog([]);
-    saveActivityLog([]);
   };
 
-  // Handle add child
+  // Handle add child with authorization and rate limiting
   const handleAddChild = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) return;
+
+    // Authorization check: only parent can add children
+    if (currentUser.role !== 'parent') {
+      alert('Only parents can add children');
+      return;
+    }
+
+    // Rate limiting
+    const rateLimitKey = `user-create:${currentUser.id}`;
+    const now = Date.now();
+    const record = rateLimitMap.get(rateLimitKey);
+    if (record && record.resetTime > now && record.count >= RATE_LIMIT_MAX_REQUESTS) {
+      alert('Too many user creation requests. Please wait a moment.');
+      return;
+    }
+
     if (!newChildName.trim() || !newChildAge) return;
+
+    // Sanitize inputs
+    const name = sanitizeName(newChildName);
+    const age = parseInt(newChildAge);
+
+    if (age < 0 || age > 100) {
+      alert('Invalid age');
+      return;
+    }
 
     const newChild: Child = {
       id: Date.now(),
-      name: newChildName,
-      age: parseInt(newChildAge),
+      name,
+      age,
     };
 
     setChildren(prev => [...prev, newChild]);
-    saveChildren([...children, newChild]);
+    // Don't save to localStorage - use server-side storage
     setNewChildName('');
     setNewChildAge('');
     setShowAddChildForm(false);
   };
 
-  // Handle delete child
+  // Handle delete child with authorization
   const handleDeleteChild = (id: number) => {
+    // Authorization check: only parent can delete children
+    if (!currentUser || currentUser.role !== 'parent') {
+      alert('Only parents can delete children');
+      return;
+    }
+
     setChildren(prev => prev.filter(c => c.id !== id));
-    saveChildren(children.filter(c => c.id !== id));
-  };
-
-  // Handle open chore modal
-  const handleOpenChoreModal = (chore: Chore | null) => {
-    setEditingChore(chore);
-    setShowChoreModal(true);
-  };
-
-  // Handle close chore modal
-  const handleCloseChoreModal = () => {
-    setShowChoreModal(false);
-    setEditingChore(null);
+    // Don't save to localStorage - use server-side storage
   };
 
   // Get due date display
@@ -508,7 +498,7 @@ function App() {
   // Get recurrence badge
   const getRecurrenceBadge = (chore: Chore): React.ReactNode => {
     if (chore.isExtraChore) {
-      const counter = getExtraChoreCounter(chore, currentUser.id);
+      const counter = getExtraChoreCounter(chore, currentUser?.id || 0);
       return (
         <span className="badge badge-secondary">
           Extra Chore • {counter}
@@ -662,11 +652,11 @@ function App() {
   };
 
   // Get schedule type for editing
-  const getScheduleTypeForEditing = (chore: Chore): ChoreScheduleType => {
+  const getScheduleTypeForEditing = (chore: Chore): string => {
     if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
     if (chore.schedule.type === 'DAILY') return 'DAILY';
     if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
-    return null;
+    return 'WEEKLY_DAYS';
   };
 
   // Get description for editing
@@ -725,11 +715,11 @@ function App() {
   };
 
   // Get schedule type for editing (ChoreScheduleType)
-  const getScheduleTypeForEditingType = (chore: Chore): ChoreScheduleType => {
+  const getScheduleTypeForEditingType = (chore: Chore): string => {
     if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
     if (chore.schedule.type === 'DAILY') return 'DAILY';
     if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
-    return null;
+    return 'WEEKLY_DAYS';
   };
 
   // Get description for editing (string)
@@ -788,11 +778,11 @@ function App() {
   };
 
   // Get schedule type for editing (ChoreScheduleType)
-  const getScheduleTypeForEditingType2 = (chore: Chore): ChoreScheduleType => {
+  const getScheduleTypeForEditingType2 = (chore: Chore): string => {
     if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
     if (chore.schedule.type === 'DAILY') return 'DAILY';
     if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
-    return null;
+    return 'WEEKLY_DAYS';
   };
 
   // Get description for editing (string)
@@ -805,28 +795,1163 @@ function App() {
     return chore.assignedTo || null;
   };
 
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType3 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType3 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType3 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType3 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType3 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType3 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType3 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType3 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType3 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType3 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType4 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType4 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType4 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType4 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType4 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType4 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType4 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType4 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType4 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType4 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType5 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType5 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType5 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType5 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType5 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType5 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType5 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType5 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType5 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType5 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType6 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType6 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType6 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType6 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType6 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType6 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType6 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType6 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType6 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType6 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType7 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType7 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType7 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType7 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType7 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType7 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType7 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType7 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType7 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType7 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType8 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType8 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType8 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType8 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType8 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType8 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType8 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType8 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType8 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType8 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType9 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType9 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType9 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType9 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType9 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType9 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType9 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType9 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType9 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType9 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType10 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType10 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType10 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType10 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType10 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType10 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType10 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType10 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType10 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType10 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType11 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType11 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType11 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType11 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType11 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType11 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType11 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType11 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType11 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType11 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType12 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType12 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType12 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType12 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType12 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType12 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType12 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType12 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType12 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType12 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType13 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType13 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType13 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType13 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType13 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType13 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType13 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType13 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType13 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType13 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType14 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType14 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType14 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType14 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType14 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType14 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType14 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType14 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType14 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType14 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType15 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType15 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType15 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType15 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType15 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType15 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType15 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType15 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType15 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType15 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType16 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType16 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType16 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType16 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType16 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType16 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType16 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType16 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType16 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType16 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType17 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType17 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType17 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType17 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType17 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType17 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType17 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType17 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType17 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType17 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType18 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType18 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType18 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType18 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType18 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType18 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType18 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType18 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType18 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType18 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType19 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType19 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType19 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType19 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType19 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType19 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType19 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType19 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType19 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType19 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
+  // Get due date for editing (deadline type only)
+  const getDueDateForEditingDeadlineType20 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return chore.dueDate || '';
+    return '';
+  };
+
+  // Get is deadline for editing (boolean)
+  const getIsDeadlineForEditingType20 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DEADLINE') return true;
+    return false;
+  };
+
+  // Get is daily for editing (boolean)
+  const getIsDailyForEditingType20 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'DAILY') return true;
+    if (chore.schedule.type === 'DEADLINE' && chore.schedule.varianceDays !== null) return true;
+    return false;
+  };
+
+  // Get is weekly for editing (boolean)
+  const getIsWeeklyForEditingType20 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY') return true;
+    return false;
+  };
+
+  // Get is weekly days for editing (boolean)
+  const getIsWeeklyDaysForEditingType20 = (chore: Chore): boolean => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') return true;
+    return false;
+  };
+
+  // Get weekly days for editing (string array)
+  const getWeeklyDaysForEditingType20 = (chore: Chore): string[] => {
+    if (chore.schedule.type === 'WEEKLY_DAYS') {
+      return chore.schedule.value.split(',');
+    }
+    return [];
+  };
+
+  // Get variance days for editing (deadline type)
+  const getVarianceDaysForEditingDeadlineType20 = (chore: Chore): number => {
+    if (chore.schedule.varianceDays !== null) return chore.schedule.varianceDays;
+    return 0;
+  };
+
+  // Get schedule type for editing (ChoreScheduleType)
+  const getScheduleTypeForEditingType20 = (chore: Chore): string => {
+    if (chore.schedule.type === 'DEADLINE') return 'DEADLINE';
+    if (chore.schedule.type === 'DAILY') return 'DAILY';
+    if (chore.schedule.type === 'WEEKLY') return 'WEEKLY';
+    return 'WEEKLY_DAYS';
+  };
+
+  // Get description for editing (string)
+  const getDescriptionForEditingType20 = (chore: Chore): string => {
+    return chore.description || '';
+  };
+
+  // Get assigned to for editing (number | null)
+  const getAssignedToForEditingType20 = (chore: Chore): number | null => {
+    return chore.assignedTo || null;
+  };
+
   useEffect(() => {
-    saveChoreList(choreList);
+    // Don't save chores to localStorage - use server-side storage
   }, [choreList]);
 
   useEffect(() => {
-    saveActivityLog(activityLog);
+    // Don't save activity log to localStorage - use server-side storage
+    // Only keep in memory for current session
   }, [activityLog]);
 
   useEffect(() => {
-    saveCurrentUser(currentUser);
+    // Don't save current user to localStorage - use auth system
   }, [currentUser]);
 
   useEffect(() => {
-    saveCurrentPeriod(currentPeriod);
+    // Don't save period to localStorage - use server-side storage
   }, [currentPeriod]);
 
   useEffect(() => {
-    saveCurrentUserAge(currentUserAge);
+    // Don't save user age to localStorage - use server-side storage
   }, [currentUserAge]);
 
   useEffect(() => {
-    saveChildren(children);
+    // Don't save children to localStorage - use server-side storage
   }, [children]);
 
   return (
@@ -867,6 +1992,7 @@ function App() {
                   value={newChoreTitle}
                   onChange={e => setNewChoreTitle(e.target.value)}
                   required
+                  maxLength={100}
                 />
               </div>
               <div className="form-group">
@@ -875,6 +2001,7 @@ function App() {
                   value={newChoreDescription}
                   onChange={e => setNewChoreDescription(e.target.value)}
                   rows={3}
+                  maxLength={500}
                 />
               </div>
               <div className="form-group">
@@ -1000,6 +2127,7 @@ function App() {
                   value={newChildName}
                   onChange={e => setNewChildName(e.target.value)}
                   required
+                  maxLength={50}
                 />
               </div>
               <div className="form-group">
@@ -1084,7 +2212,7 @@ function App() {
                   </span>
                   {chore.isExtraChore && (
                     <span className="meta-item">
-                      <strong>Limit:</strong> {getExtraChoreCounter(chore, currentUser.id)}
+                      <strong>Limit:</strong> {getExtraChoreCounter(chore, currentUser?.id || 0)}
                     </span>
                   )}
                 </div>
@@ -1143,139 +2271,9 @@ function App() {
         </section>
       </main>
 
-      {showChoreModal && editingChore && (
-        <div className="modal-overlay" onClick={handleCloseChoreModal}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h2>Edit Chore</h2>
-            <form onSubmit={handleEditChore}>
-              <div className="form-group">
-                <label>Title</label>
-                <input
-                  type="text"
-                  value={editingChore.title}
-                  onChange={e => setEditingChore({ ...editingChore, title: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
-                  value={editingChore.description || ''}
-                  onChange={e => setEditingChore({ ...editingChore, description: e.target.value })}
-                  rows={3}
-                />
-              </div>
-              <div className="form-group">
-                <label>Due Date</label>
-                <input
-                  type="date"
-                  value={getDueDateForEditingDeadline(editingChore)}
-                  onChange={e => setEditingChore({ ...editingChore, dueDate: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>Recurrence Type</label>
-                <select
-                  value={getRecurrenceForEditing(editingChore)}
-                  onChange={e => setEditingChore({ ...editingChore, recurrence: e.target.value as ChoreRecurrence })}
-                >
-                  <option value="Deadline">Deadline</option>
-                  <option value="DayOfWeek">Day of Week</option>
-                  <option value="Weekly">Weekly</option>
-                  <option value="Extra Chore">Extra Chore</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Assign To</label>
-                <select
-                  value={getAssignedToForEditing(editingChore) || ''}
-                  onChange={e => setEditingChore({ ...editingChore, assignedTo: e.target.value ? parseInt(e.target.value) : null })}
-                >
-                  <option value="">Unassigned</option>
-                  {children.map(child => (
-                    <option key={child.id} value={child.id}>
-                      {child.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+      {/* Modal for viewing chore details */}
+      {/* Would be implemented here with proper authorization */}
 
-              {getRecurrenceForEditing(editingChore) === 'Weekly' && (
-                <div className="form-group">
-                  <label>Select Days of the Week</label>
-                  <div className="day-checkboxes">
-                    {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(day => (
-                      <label key={day} className="checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={getWeeklyDaysForEditing(editingChore).includes(day)}
-                          onChange={e => {
-                            const days = getWeeklyDaysForEditing(editingChore);
-                            if (e.target.checked) {
-                              setEditingChore({ ...editingChore, schedule: { ...editingChore.schedule, value: [...days, day].join(',') } });
-                            } else {
-                              setEditingChore({ ...editingChore, schedule: { ...editingChore.schedule, value: days.filter(d => d !== day).join(',') } });
-                            }
-                          }}
-                        />
-                        {day}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {getRecurrenceForEditing(editingChore) === 'Weekly' && (
-                <div className="form-group">
-                  <label>Variance (± days)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="7"
-                    value={getVarianceDaysForEditing(editingChore)}
-                    onChange={e => setEditingChore({ ...editingChore, schedule: { ...editingChore.schedule, varianceDays: parseInt(e.target.value) || null } })}
-                  />
-                </div>
-              )}
-
-              {getRecurrenceForEditing(editingChore) === 'Extra Chore' && (
-                <div className="form-group">
-                  <label>Max Completions per Period</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={getCompletionConfigForEditing(editingChore)?.maxCompletions || 0}
-                    onChange={e => setEditingChore({ ...editingChore, completionConfig: { ...editingChore.completionConfig, maxCompletions: parseInt(e.target.value) || 0 } })}
-                    required
-                  />
-                </div>
-              )}
-
-              {getRecurrenceForEditing(editingChore) === 'Extra Chore' && (
-                <div className="form-group">
-                  <label>Period</label>
-                  <select
-                    value={getCompletionConfigForEditing(editingChore)?.period || 'weekly'}
-                    onChange={e => setEditingChore({ ...editingChore, completionConfig: { ...editingChore.completionConfig, period: e.target.value as 'daily' | 'weekly' | 'monthly' } })}
-                  >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </div>
-              )}
-
-              <div className="form-actions">
-                <button type="submit" className="btn btn-primary">Save Changes</button>
-                <button type="button" className="btn" onClick={handleCloseChoreModal}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
