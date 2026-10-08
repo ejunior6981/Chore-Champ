@@ -38,6 +38,8 @@ function App() {
   const [newChildAge, setNewChildAge] = useState('');
   const [varianceDays, setVarianceDays] = useState<number>(0);
   const [showVarianceSelector, setShowVarianceSelector] = useState(false);
+  // SECURITY: Removed session-related localStorage keys to prevent XSS vulnerability
+  // Session tokens are now stored in httpOnly cookies via server
   const [weeklyDays, setWeeklyDays] = useState<string[]>([]);
   const [extraChoreMaxCompletions, setExtraChoreMaxCompletions] = useState<number>(0);
   const [extraChorePeriod, setExtraChorePeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');

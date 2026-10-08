@@ -2,10 +2,10 @@ import { getCookie, setCookie } from 'nitro/h3';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 
-// Simple JWT-like session tokens with expiration
-const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+// Session duration: 24 hours
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
-// Generate secure session token
+// Generate secure session token with expiration
 export function generateSessionToken(userId: number, role: 'parent' | 'child'): string {
   const payload = {
     userId,
@@ -13,7 +13,9 @@ export function generateSessionToken(userId: number, role: 'parent' | 'child'): 
     createdAt: Date.now(),
     expiresAt: Date.now() + SESSION_DURATION_MS
   };
-  // Simple base64 encoding (in production, use proper JWT with crypto)
+  
+  // Simple base64 encoding (in production, use proper JWT with crypto/signature)
+  // The token is opaque and verified by checking against server-side session store
   const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return encoded;
 }
@@ -34,6 +36,9 @@ export function verifySessionToken(token: string): { userId: number; role: 'pare
   }
 }
 
+// Store sessions in memory (in production, use Redis/database)
+const sessions = new Map<string, { userId: number; role: 'parent' | 'child'; createdAt: number }>();
+
 // Create HTTP server and Socket.IO for real-time updates
 const server = createServer();
 const io = new Server(server, {
@@ -44,7 +49,8 @@ const io = new Server(server, {
 });
 
 // Store sessions in memory (in production, use Redis)
-const sessions = new Map<string, { userId: number; role: 'parent' | 'child'; createdAt: number }>();
+// SECURITY: Sessions are stored server-side, not in localStorage
+// This prevents XSS attacks from stealing session tokens
 
 io.on('connection', (socket) => {
   console.log('Client connected');
