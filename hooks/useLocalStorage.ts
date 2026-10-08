@@ -32,25 +32,21 @@ export const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dis
 
 export const useStorageReset = (): (() => void) => {
   const resetStorage = () => {
-    // Keys to reset: children, rewards, requests, chores, activity log
-    const keysToReset = [
-      'chore-champ-users',           // Contains all users (children and parent)
-      'chore-champ-currentUser',     // Current user session
-      'chore-champ-chores',          // Chore tasks
-      'chore-champ-rewards',         // Reward items
-      'chore-champ-requests',        // Point requests
-      'chore-champ-notifications',   // Notification messages
-      'chore-champ-activity-log',    // Activity history
+    // Keep ONLY parent user and PIN - reset everything else
+    const keysToKeep = [
+      'chore-champ-users',           // Keep the parent user
+      'chore-champ-pin',             // Keep the PIN
     ];
     
-    // Get all chore-champ keys and filter to only reset the ones we want
+    // Get all chore-champ keys
     const allKeys = Object.keys(localStorage)
       .filter(key => key.startsWith('chore-champ-'))
       .sort();
     
-    const filteredKeys = allKeys.filter(key => keysToReset.includes(key));
+    // Remove keys that are NOT in the keep list
+    const keysToRemove = allKeys.filter(key => !keysToKeep.includes(key));
     
-    filteredKeys.forEach(key => {
+    keysToRemove.forEach(key => {
       localStorage.removeItem(key);
     });
   };
