@@ -69,5 +69,3 @@ export interface Notification {
   read: boolean;
   targetRole: UserRole;
 }
-
-export default Notification;
