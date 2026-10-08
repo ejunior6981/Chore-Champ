@@ -136,7 +136,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     
     // Delete the child
     await page.click('.child-card:has-text("Child 4") button:has-text("Delete")');
-    await expect(page.locator('.child-card:has-text("Child 4")')).not.toHaveText('Child 4');
+    await expect(page.locator('.child-card:has-text("Child 4")')).not.toBeVisible();
     
     // Verify activity log was updated
     await expect(page.locator('.activity-item')).toHaveCount(1);
