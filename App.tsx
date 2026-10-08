@@ -278,7 +278,7 @@ const App: React.FC = () => {
   };
 
   const handleSaveAvatar = (newAvatar: string) => {
-    setUsers(prev => prev.map(u => u.id === currentUserId ? { ...u, avatar: newAvatar } : u));
+    setUsers(prev => prev.map(u => u.id === currentUserId && u.role === 'child' ? { ...u, avatar: newAvatar } : u));
     setIsProfileModalOpen(false);
   };
 
@@ -350,7 +350,7 @@ const App: React.FC = () => {
     }
 
     setChores(prev => prev.map(c => c.id === choreId ? updatedChore : c));
-  }, [chores, setChores, addNotification, users, setUsers, currentUser.id]);
+  }, [chores, setChores, addNotification, users, setUsers]);
 
   const handleChoreOverride = useCallback((choreId: number) => {
     const chore = chores.find(c => c.id === choreId);
@@ -413,8 +413,8 @@ const App: React.FC = () => {
 
   const handleRedeemReward = useCallback((rewardId: number) => {
     const reward = rewards.find(r => r.id === rewardId);
-    if (reward && currentUser && currentUser.role === 'child' && currentUser.points >= reward.points) {
-      setUsers(prev => prev.map(u => u.id === currentUser.id ? {...u, points: u.points - reward.points} : u));
+    if (reward && currentUser?.role === 'child' && currentUser?.points >= reward.points) {
+      setUsers(prev => prev.map(u => u.id === currentUser?.id ? {...u, points: u.points - reward.points} : u));
       alert(`You've redeemed "${reward.name}"!`);
     }
   }, [rewards, currentUser, setUsers]);
@@ -601,7 +601,7 @@ const App: React.FC = () => {
           return;
       }
 
-      if (userToDelete.role === 'parent' && parentUsers.length <= 1) {
+      if (userToDelete.role === 'parent' && parentUsers?.length <= 1) {
           alert("You cannot delete the last parent account.");
           return;
       }
@@ -614,6 +614,7 @@ const App: React.FC = () => {
           
           setUsers(prev => prev.filter(u => u.id !== userId));
       }
+  }, [users, parentUsers]);
   };
 
   const resetDailyChores = () => {
@@ -632,12 +633,12 @@ const App: React.FC = () => {
   const handleToggleNotifications = () => {
     setIsNotificationsOpen(prev => !prev);
     if (!isNotificationsOpen) {
-      setNotifications(prev => prev.map(n => n.targetRole === currentUser.role ? { ...n, read: true } : n));
+      setNotifications(prev => prev.map(n => n.targetRole === currentUser?.role ? { ...n, read: true } : n));
     }
   };
 
   const handleClearNotifications = () => {
-      setNotifications(prev => prev.filter(n => n.targetRole !== currentUser.role));
+      setNotifications(prev => prev.filter(n => n.targetRole !== currentUser?.role));
   };
 
   const sortedChores = useMemo(() => {
@@ -646,9 +647,9 @@ const App: React.FC = () => {
       [ChoreStatus.PendingApproval]: 2,
       [ChoreStatus.Completed]: 3,
     };
-     const userChores = currentUser.role === 'parent' 
-      ? chores 
-      : chores.filter(c => c.assignedTo === currentUser.id || !c.assignedTo);
+     const userChores = currentUser?.role === 'parent'
+      ? chores
+      : chores.filter(c => c.assignedTo === currentUser?.id || !c.assignedTo);
 
     return [...userChores].sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
   }, [chores, currentUser]);
@@ -658,11 +659,11 @@ const App: React.FC = () => {
   }, [pointRequests]);
 
   const unreadNotificationsCount = useMemo(() => {
-    return notifications.filter(n => n.targetRole === currentUser.role && !n.read).length;
+    return notifications.filter(n => n.targetRole === currentUser?.role && !n.read).length;
   }, [notifications, currentUser]);
   
   const currentUserNotifications = useMemo(() => {
-    return notifications.filter(n => n.targetRole === currentUser.role);
+    return notifications.filter(n => n.targetRole === currentUser?.role);
   }, [notifications, currentUser]);
 
   if (!currentUser) {
@@ -732,7 +733,7 @@ const App: React.FC = () => {
               ))}
             </div>
           )}
-          {activeView === View.Requests && currentUser.role === 'parent' && (
+          {activeView === View.Requests && currentUser?.role === 'parent' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {pointRequests.map(req => {
                 const requestingUser = users.find(u => u.id === req.userId);
@@ -740,7 +741,7 @@ const App: React.FC = () => {
               })}
             </div>
           )}
-          {activeView === View.Users && currentUser.role === 'parent' && (
+          {activeView === View.Users && currentUser?.role === 'parent' && (
             <div>
               <div className="flex justify-between items-center mb-4">
                   <h2 className="text-2xl font-bold">Manage Family</h2>
@@ -763,7 +764,7 @@ const App: React.FC = () => {
                               <button onClick={() => handleOpenEditUserModal(user)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-100 rounded-full transition-colors" aria-label={`Edit ${user.name}`}>
                                   <PencilIcon className="w-5 h-5" />
                               </button>
-                              <button 
+                              <button
                                 onClick={() => handleDeleteUser(user.id)}
                                 disabled={user.id === currentUserId || (user.role === 'parent' && parentUsers.length <= 1)}
                                 className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -780,14 +781,14 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {currentUser.role === 'parent' && (
+      {currentUser?.role === 'parent' && (
         <div className="fixed bottom-24 right-4 z-50">
           <button onClick={() => openModal('addPoints')} className="bg-purple-600 text-white rounded-full p-4 shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:ring-offset-2 focus:ring-offset-sky-50 transition-transform transform hover:scale-110" aria-label="Assign points">
             <CogIcon className="w-8 h-8" />
           </button>
         </div>
       )}
-      {currentUser.role === 'child' && (
+      {currentUser?.role === 'child' && (
         <div className="fixed bottom-24 right-4 z-50">
           <button onClick={() => openModal('requestPoints')} className="bg-fuchsia-600 text-white rounded-full p-4 shadow-lg hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-600 focus:ring-offset-2 focus:ring-offset-sky-50 transition-transform transform hover:scale-110" aria-label="Request points">
             <PlusIcon className="w-8 h-8" />
@@ -795,7 +796,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {currentUser.role === 'parent' && (
+      {currentUser?.role === 'parent' && (
         <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-slate-200 p-2 shadow-t-lg">
           <div className="container mx-auto flex justify-center items-center space-x-2">
             <button onClick={() => openModal('addChore')} className="flex-1 text-sm bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-blue-600 flex items-center justify-center space-x-2"><PlusIcon className="w-5 h-5" /><span>Add Chore</span></button>
@@ -805,9 +806,9 @@ const App: React.FC = () => {
         </footer>
       )}
       
-      {isProfileModalOpen && currentUser.role === 'child' && (
+      {isProfileModalOpen && currentUser?.role === 'child' && (
         <ProfileModal
-          currentAvatar={currentUser.avatar}
+          currentAvatar={currentUser?.avatar}
           onSave={handleSaveAvatar}
           onClose={() => setIsProfileModalOpen(false)}
         />
