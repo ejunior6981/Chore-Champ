@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { StarIcon, BellIcon, ChevronDownIcon } from './icons';
+import { StarIcon, BellIcon, ChevronDownIcon, LogoutIcon } from './icons';
 import { User, Notification } from '../types';
 import AvatarDisplay from './AvatarDisplay';
 import NotificationPanel from './NotificationPanel';
@@ -120,23 +120,22 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                                             onClick={onLogout}
                                             className="w-full text-left p-3 text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2"
                                         >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V4a1 1 0 00-1-1H3zm11 1a1 1 0 011 1v6a1 1 0 11-2 0V5a1 1 0 011-1z" clipRule="evenodd" />
-                                            </svg>
+                                            <LogoutIcon className="h-5 w-5" />
                                             <span>Logout</span>
                                         </button>
-                                        <hr className="my-1" />
-                                        <li>
-                                            <button
-                                                onClick={onResetData}
-                                                className="w-full text-left p-3 text-amber-600 hover:bg-amber-50 transition-colors flex items-center gap-2"
-                                            >
-                                                <RefreshCwIcon className="h-5 w-5" />
-                                                <span>Reset All Data</span>
-                                            </button>
-                                        </li>
-                                    </>
-                                )}
+                                    </li>
+                                    <hr className="my-1" />
+                                    <li>
+                                        <button
+                                            onClick={onResetData}
+                                            className="w-full text-left p-3 text-amber-600 hover:bg-amber-50 transition-colors flex items-center gap-2"
+                                        >
+                                            <RefreshCwIcon className="h-5 w-5" />
+                                            <span>Reset All Data</span>
+                                        </button>
+                                    </li>
+                                </>
+                            )}
                             </ul>
                         </div>
                     )}
