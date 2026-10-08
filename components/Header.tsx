@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { StarIcon, BellIcon, ChevronDownIcon } from './icons';
-import { User, Notification } from '../types';
+import { User, Notification } from '../types.ts';
 import AvatarDisplay from './AvatarDisplay';
 import NotificationPanel from './NotificationPanel';
 

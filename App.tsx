@@ -1,7 +1,7 @@
 
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, Notification, User } from './types';
+import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, Notification, User } from './types.ts';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import Header from './components/Header';
 import ChoreCard from './components/ChoreCard';

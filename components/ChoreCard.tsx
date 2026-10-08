@@ -1,7 +1,7 @@
 
 
 import React, { useState } from 'react';
-import { Chore, ChoreStatus, ChoreRecurrence, User } from '../types';
+import { Chore, ChoreStatus, ChoreRecurrence, User } from '../types.ts';
 import { StarIcon, CheckCircleIcon, RefreshIcon, InformationCircleIcon, PencilIcon, FireIcon, ShieldCheckIcon } from './icons';
 
 interface ChoreCardProps {
