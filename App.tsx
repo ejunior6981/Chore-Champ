@@ -1,7 +1,8 @@
 
 
-import React, { useState, useCallback, useMemo } from 'react';
-import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, Notification, User } from './types';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, User } from './types';
+import type { Notification } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import Header from './components/Header';
 import ChoreCard from './components/ChoreCard';
@@ -28,44 +29,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Request notification permission and handle push subscription
-  useEffect(() => {
-    // Request permission on initial load (optional - can be triggered by user)
-    const requestNotificationPermission = async () => {
-      if ('Notification' in window && Notification.permission === 'default') {
-        // Don't auto-request permission - let user choose when needed
-        // Uncomment below if you want to auto-request:
-        // const permission = await Notification.requestPermission();
-        // if (permission === 'granted') {
-        //   subscribeToPush();
-        // }
-      }
-    };
-
-    requestNotificationPermission();
-
-    // Listen for push subscription changes
-    window.addEventListener('push', handlePushSubscriptionChange);
-
-    return () => {
-      window.removeEventListener('push', handlePushSubscriptionChange);
-    };
-  }, []);
-
-  const handlePushSubscriptionChange = async (event: PushEvent) => {
-    const subscription = event.waitUntil(event.request.subscription);
-    console.log('Push subscription changed:', subscription);
-
-    // Send subscription to backend if you have one
-    // await sendSubscriptionToBackend(subscription);
-  };
-
-  // Handle push notification clicks
-  const handleNotificationClick = async (event: NotificationEvent) => {
-    event.waitUntil(
-      clients.openWindow('/')
-    );
-  };
 
   const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', [
     { id: 1, name: 'Parent', role: 'parent', avatar: null, points: 0 },

@@ -14,15 +14,6 @@ export default defineConfig(({ mode }) => {
       plugins: [
         dyadComponentTagger(),
         react(),
-        // Copy service worker to dist
-        {
-          name: 'copy-service-worker',
-          enforce: 'post',
-          closeBundle: false,
-          generateBundle() {
-            this.copy('public/sw.js', 'sw.js');
-          }
-        }
       ],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
