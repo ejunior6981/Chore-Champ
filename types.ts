@@ -1,3 +1,5 @@
+
+
 export enum ChoreStatus {
   Incomplete = 'INCOMPLETE',
   PendingApproval = 'PENDING_APPROVAL',
@@ -18,14 +20,14 @@ export interface Chore {
   requiresApproval: boolean;
   recurrence: ChoreRecurrence;
   description?: string;
-  assignedTo?: number;
+  assignedTo?: number; // User ID
   streak?: number;
-  lastCompletedDate?: string;
+  lastCompletedDate?: string; // ISO date string
 }
 
 export interface Reward {
   id: number;
-  name: string;
+  name:string;
   points: number;
 }
 
@@ -47,17 +49,17 @@ export interface User {
 }
 
 export enum PointRequestStatus {
-  Pending = 'PENDING',
-  Approved = 'APPROVED',
-  Denied = 'DENIED',
+    Pending = 'PENDING',
+    Approved = 'APPROVED',
+    Denied = 'DENIED',
 }
 
 export interface PointRequest {
-  id: number;
-  userId: number;
-  description: string;
-  points: number;
-  status: PointRequestStatus;
+    id: number;
+    userId: number; // User ID of child who made the request
+    description: string;
+    points: number;
+    status: PointRequestStatus;
 }
 
 export interface Notification {
