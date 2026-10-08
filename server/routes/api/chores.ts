@@ -9,14 +9,14 @@ const RATE_LIMIT_MAX_REQUESTS = 10;
 
 function checkRateLimit(key: string): boolean {
   const now = Date.now();
-  const record = rateLimitMap.get(key);
+  let record = rateLimitMap.get(key);
   
   if (!record || record.resetTime < now) {
     rateLimitMap.set(key, { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS });
     return true;
   }
   
-  const record = rateLimitMap.get(key)!;
+  record = rateLimitMap.get(key)!;
   if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
     return false;
   }
