@@ -1,7 +1,7 @@
 export interface ChoreSchedule {
-  type: 'DEADLINE' | 'DAY_OF_WEEK' | 'WEEKLY_DAYS' | null;
+  type: 'DEADLINE' | 'DAILY' | 'WEEKLY' | 'WEEKLY_DAYS' | null;
   value: string;
-  scheduleType: ChoreScheduleType;
+  scheduleType: 'DEADLINE' | 'DAILY' | 'WEEKLY' | null;
   varianceDays: number | null;
 }
 
@@ -22,6 +22,15 @@ export interface Chore {
   isCompleted: boolean;
   completedAt?: string;
 }
+
+export interface User {
+  id: number;
+  name: string;
+  age: number;
+  role: 'parent' | 'child';
+}
+
+export type Period = 'weekly' | 'daily' | 'monthly';
 
 export interface Child {
   id: number;

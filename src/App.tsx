@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, React } from 'react';
 import './App.css';
 import { Chore, Child, ActivityEvent, User, Period } from './types';
 
 type ChoreRecurrence = 'Deadline' | 'DayOfWeek' | 'Weekly' | 'Extra Chore';
 type ChoreScheduleType = 'DEADLINE' | 'DAILY' | 'WEEKLY' | null;
+type ChoreSchedule = { type: 'DEADLINE' | 'DAILY' | 'WEEKLY' | 'WEEKLY_DAYS' | null; value: string; scheduleType: 'DEADLINE' | 'DAILY' | 'WEEKLY' | null; varianceDays: number | null; };
 
 function App() {
   const [choreList, setChoreList] = useState<Chore[]>([]);
@@ -48,7 +49,7 @@ function App() {
 
   const parseCurrentUser = (): User => {
     const saved = localStorage.getItem('currentUser');
-    return saved ? JSON.parse(saved) : { id: 1, name: 'Parent', age: 30 };
+    return saved ? JSON.parse(saved) : { id: 1, name: 'Parent', age: 30, role: 'parent' };
   };
 
   const parseCurrentPeriod = (): Period => {
