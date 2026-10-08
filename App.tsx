@@ -615,7 +615,6 @@ const App: React.FC = () => {
           setUsers(prev => prev.filter(u => u.id !== userId));
       }
   }, [users, parentUsers]);
-  };
 
   const resetDailyChores = () => {
     if (window.confirm("Are you sure you want to reset all daily chores?")) {
