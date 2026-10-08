@@ -1,4 +1,4 @@
-import { authState } from './server/routes/api/auth';
+import { authState } from '../../server/routes/api/auth';
 
 // Auth utility for client-side session management
 // SECURITY: All authentication happens server-side

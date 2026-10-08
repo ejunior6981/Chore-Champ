@@ -15,8 +15,8 @@ users.set(2, { id: 2, name: 'Alex', age: 10, role: 'child', pin: '1234' });
 users.set(3, { id: 3, name: 'Emma', age: 8, role: 'child', pin: '5678' });
 
 // Login with PIN verification
-export async function onRequestPostLogin() {
-  const body = await readBody();
+export async function onRequestPostLogin(event: { cookie: { 'chore-champ-session-token'?: string } }, params: { body: string | object }) {
+  const body = await readBody(event);
   const data = typeof body === 'string' ? JSON.parse(body) : body;
   
   const { userId, pin, role } = data;
@@ -58,17 +58,13 @@ export async function onRequestPostLogin() {
   const sessionToken = generateSessionToken(user.id, user.role);
   
   // SECURITY FIX 2: Set httpOnly, secure cookie (in production, ensure HTTPS)
-  setCookie(
-    'chore-champ-session-token',
-    sessionToken,
-    {
-      maxAge: 24 * 60 * 60, // 24 hours
-      path: '/',
-      httpOnly: true, // SECURITY: Prevents JavaScript access, mitigates XSS
-      secure: true,   // SECURITY: Only send over HTTPS (in production)
-      sameSite: 'lax', // CSRF protection
-    }
-  );
+  setCookie(event, 'chore-champ-session-token', sessionToken, {
+    maxAge: 24 * 60 * 60, // 24 hours
+    path: '/',
+    httpOnly: true, // SECURITY: Prevents JavaScript access, mitigates XSS
+    secure: true,   // SECURITY: Only send over HTTPS (in production)
+    sameSite: 'lax', // CSRF protection
+  });
   
   return new Response(JSON.stringify({
     success: true,
@@ -81,11 +77,11 @@ export async function onRequestPostLogin() {
 }
 
 // Logout - clear session
-export async function onRequestPostLogout() {
-  const token = getCookie('chore-champ-session-token');
+export async function onRequestPostLogout(event: { cookie: { 'chore-champ-session-token'?: string } }) {
+  const token = getCookie(event, 'chore-champ-session-token');
   
   if (token) {
-    setCookie('chore-champ-session-token', '', { maxAge: 0, path: '/' });
+    setCookie(event, 'chore-champ-session-token', '', { maxAge: 0, path: '/' });
   }
   
   return new Response(JSON.stringify({ success: true }), {

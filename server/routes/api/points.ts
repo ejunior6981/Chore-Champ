@@ -24,16 +24,16 @@ function checkRateLimit(key: string): boolean {
 }
 
 // POST /api/points - Add points with authorization
-export async function onRequestPostPoints() {
-  const token = getCookie('session-token');
+export async function onRequestPostPoints(event: { cookie: { 'session-token'?: string } }, params: { body: string | object }) {
+  const token = getCookie(event, 'session-token');
   
   if (!token) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   const session = verifySessionToken(token);
   if (!session) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   // Authorization: Only parents can award points
@@ -44,7 +44,7 @@ export async function onRequestPostPoints() {
     });
   }
   
-  const body = await readBody();
+  const body = await readBody(event);
   const data = typeof body === 'string' ? JSON.parse(body) : body;
   
   // Rate limiting
@@ -88,19 +88,19 @@ export async function onRequestPostPoints() {
 }
 
 // POST /api/rewards - Redeem reward with authorization
-export async function onRequestPostRewards() {
-  const token = getCookie('session-token');
+export async function onRequestPostRewards(event: { cookie: { 'session-token'?: string } }, params: { body: string | object }) {
+  const token = getCookie(event, 'session-token');
   
   if (!token) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   const session = verifySessionToken(token);
   if (!session) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
-  const body = await readBody();
+  const body = await readBody(event);
   const data = typeof body === 'string' ? JSON.parse(body) : body;
   
   // Authorization: Only children can request rewards

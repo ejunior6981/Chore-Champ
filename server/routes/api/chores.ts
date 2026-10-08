@@ -25,16 +25,16 @@ function checkRateLimit(key: string): boolean {
 }
 
 // GET /api/chores - Get chores for authenticated user
-export async function onRequestGetChores() {
-  const token = getCookie('session-token');
+export async function onRequestGetChores(event: { cookie: { 'session-token'?: string } }) {
+  const token = getCookie(event, 'session-token');
   
   if (!token) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   const session = verifySessionToken(token);
   if (!session) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   // In production, fetch from database with proper filtering
@@ -47,19 +47,19 @@ export async function onRequestGetChores() {
 }
 
 // POST /api/chores - Create chore with authorization check
-export async function onRequestPostChores() {
-  const token = getCookie('session-token');
+export async function onRequestPostChores(event: { cookie: { 'session-token'?: string } }, params: { body: string | object }) {
+  const token = getCookie(event, 'session-token');
   
   if (!token) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   const session = verifySessionToken(token);
   if (!session) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
-  const body = await readBody();
+  const body = await readBody(event);
   const data = typeof body === 'string' ? JSON.parse(body) : body;
   
   // Authorization: Only parents can assign chores to children
@@ -122,16 +122,16 @@ export async function onRequestPostChores() {
 }
 
 // DELETE /api/chores/:id - Delete chore with authorization
-export async function onRequestDeleteChores(params: { params: { id: string } }) {
-  const token = getCookie('session-token');
+export async function onRequestDeleteChores(event: { cookie: { 'session-token'?: string } }, params: { params: { id: string } }) {
+  const token = getCookie(event, 'session-token');
   
   if (!token) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   const session = verifySessionToken(token);
   if (!session) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   // Rate limiting
@@ -150,16 +150,16 @@ export async function onRequestDeleteChores(params: { params: { id: string } }) 
 }
 
 // GET /api/users - Get users (parent can see all, child sees only their info)
-export async function onRequestGetUsers() {
-  const token = getCookie('session-token');
+export async function onRequestGetUsers(event: { cookie: { 'session-token'?: string } }) {
+  const token = getCookie(event, 'session-token');
   
   if (!token) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   const session = verifySessionToken(token);
   if (!session) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   // In production, fetch from database
@@ -172,16 +172,16 @@ export async function onRequestGetUsers() {
 }
 
 // POST /api/users - Create user (parent only)
-export async function onRequestPostUsers() {
-  const token = getCookie('session-token');
+export async function onRequestPostUsers(event: { cookie: { 'session-token'?: string } }, params: { body: string | object }) {
+  const token = getCookie(event, 'session-token');
   
   if (!token) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   const session = verifySessionToken(token);
   if (!session) {
-    return sendRedirect('/login', 302);
+    return sendRedirect(event, '/login', 302);
   }
   
   // Authorization: Only parents can create users
@@ -192,7 +192,7 @@ export async function onRequestPostUsers() {
     });
   }
   
-  const body = await readBody();
+  const body = await readBody(event);
   const data = typeof body === 'string' ? JSON.parse(body) : body;
   
   // Authorization: Cannot assign PIN directly, must be generated server-side

@@ -139,7 +139,7 @@ function App() {
 
   const sanitizeName = (str: string): string => {
     if (!str) return '';
-    return String(str).replace(/[<>]/g).substring(0, 50);
+    return String(str).replace(/[<>]/g, '').substring(0, 50);
   };
 
   // Handle add chore with authorization and rate limiting
