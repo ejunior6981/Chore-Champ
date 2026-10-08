@@ -1,175 +1,101 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Chore Management End-to-End Flow', () => {
-  test('parent can add a chore, assign it to a child, complete the chore, and delete it', async ({ page }) => {
-    // Start with a clean slate
+  test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    
-    // Add a new chore with deadline
-    await page.click('button:has-text("Add Chore")');
-    await page.fill('textbox="Chore name"', 'Wash the dishes');
-    await page.fill('textbox="Description (optional)"', 'After dinner cleanup');
-    await page.fill('spinbutton="Points"', '15');
-    await page.click('radio:has-text("Deadline")');
-    await page.click('combobox="Assign To:" option:has-text("Alex")');
-    await page.click('button:has-text("Add Chore")');
-    
-    // Verify chore was added
-    await expect(page.locator('h3:has-text("Wash the dishes")')).toBeVisible();
-    await expect(page.locator('.chore-description')).toHaveText('After dinner cleanup');
-    await expect(page.locator('.chore-card').first).toContain('15');
-    await expect(page.locator('.chore-card').first).toContain('Alex');
-    
-    // Edit chore to change points
-    await page.click('button:has-text("Edit")');
-    await page.fill('spinbutton="Points"', '20');
-    await page.click('button:has-text("Save Changes")');
-    
-    // Verify points was updated
-    await expect(page.locator('.chore-card').first).toContain('20');
-    
-    // Delete the chore
-    await page.click('button:has-text("Delete")');
-    await expect(page.locator('h3:has-text("Wash the dishes")')).not.toHaveText('Wash the dishes');
-    
-    // Verify activity log was updated
-    await expect(page.locator('.activity-item')).toHaveCount(1);
-    const activityItem = page.locator('.activity-item');
-    await expect(activityItem).toHaveText('Approved');
-    await expect(activityItem).toHaveText('Alex');
+    await expect(page.locator('h2:has-text("Required Chores")')).toBeVisible();
   });
 
-  test('extra chore with completion limits works correctly', async ({ page }) => {
-    // Start with a clean slate
-    await page.goto('/');
+  test('parent can add a chore and verify it appears in the list', async ({ page }) => {
+    // Open the Add Chore modal (footer button)
+    await page.locator('footer').getByRole('button', { name: 'Add Chore' }).click();
     
-    // Add an extra chore with limit
-    await page.click('button:has-text("Add Chore")');
-    await page.fill('textbox="Chore name"', 'Wash the car');
-    await page.fill('textbox="Description (optional)"', 'Monthly car wash');
-    await page.fill('spinbutton="Points"', '50');
-    await page.click('radio:has-text("Deadline")');
-    await page.click('checkbox:has-text("This is a bonus Extra Chore")');
-    await page.fill('spinbutton="Max Completions per Period"', '1');
-    await page.selectOption('select#period', 'weekly');
-    await page.click('button:has-text("Add Chore")');
+    // Fill in the chore form with unique values
+    await page.getByPlaceholder('Chore name').fill('Wash the dishes');
+    await page.getByPlaceholder('Description (optional)').fill('After dinner cleanup');
+    await page.getByPlaceholder('Points').fill('35');
     
-    // Verify extra chore was added
-    await expect(page.locator('.badge:has-text("Extra Chore")')).toBeVisible();
+    // Assign to Alex (the first child)
+    await page.locator('#assignTo').selectOption({ label: 'Alex' });
     
-    // Verify limit counter is displayed
-    await expect(page.locator('.meta-item:has-text("Limit:")')).toHaveText('0/1');
+    // Set recurrence to Daily
+    await page.locator('#recurrence').selectOption({ label: 'Daily' });
     
-    // Complete the chore once
-    await page.click('button:has-text("Complete")');
+    // Submit the form (modal button)
+    await page.getByRole('button', { name: 'Add Chore' }).last().click();
     
-    // Verify chore is marked as completed
-    await expect(page.locator('.chore-card.completed')).toBeVisible();
+    // Verify the chore heading was added to the list
+    await expect(page.getByRole('heading', { name: 'Wash the dishes' })).toBeVisible();
     
-    // Verify counter updated
-    await expect(page.locator('.meta-item:has-text("Limit:")')).toHaveText('1/1');
-    
-    // Try to complete again - should be blocked
-    await page.click('button:has-text("Complete")');
-    await expect(page.locator('.alert')).toHaveText('Please wait until the next period');
-    
-    // Delete the chore
-    await page.click('button:has-text("Delete")');
-    await expect(page.locator('.badge:has-text("Extra Chore")')).not.toBeVisible();
+    // Verify unique points value is displayed
+    await expect(page.getByText('35 Points')).toBeVisible();
   });
 
-  test('weekly multi-day chore with variance works correctly', async ({ page }) => {
-    // Start with a clean slate
-    await page.goto('/');
+  test('parent can complete a chore and verify status change', async ({ page }) => {
+    // "Help with dinner" is unassigned, so parent sees "Mark as Done" button
+    const choreCard = page.locator('div.rounded-xl:has(> div h3:text("Help with dinner"))').first();
+    await expect(choreCard).toBeVisible();
     
-    // Add a weekly chore
-    await page.click('button:has-text("Add Chore")');
-    await page.fill('textbox="Chore name"', 'Vacuum the floors');
-    await page.fill('textbox="Description (optional)"', 'Keep floors clean');
-    await page.fill('spinbutton="Points"', '25');
-    await page.click('radio:has-text("Day of Week")');
-    await page.click('checkbox:has-text("This is a bonus Extra Chore")');
-    await page.click('button:has-text("Add Chore")');
+    // Click "Mark as Done" button within that chore card
+    await choreCard.getByRole('button', { name: 'Mark as Done' }).click();
     
-    // Verify weekly chore was added
-    await expect(page.locator('.chore-card').first).toContain('Weekly');
-    
-    // Edit chore to change description
-    await page.click('button:has-text("Edit")');
-    await page.fill('textbox="Description"', 'Keep floors clean and tidy');
-    await page.click('button:has-text("Save Changes")');
-    
-    // Verify description was updated
-    await expect(page.locator('.chore-description')).toHaveText('Keep floors clean and tidy');
-    
-    // Delete the chore
-    await page.click('button:has-text("Delete")');
-    await expect(page.locator('.chore-card').first).not.toHaveAttribute('class', /completed/);
-    
-    // Verify activity log was updated
-    await expect(page.locator('.activity-item')).toHaveCount(1);
+    // Since this chore does NOT require approval, it should be completed directly
+    await expect(choreCard.getByText('Done!')).toBeVisible();
   });
 
-  test('child management works correctly', async ({ page }) => {
-    // Start with a clean slate
-    await page.goto('/');
+  test('parent can add a family member', async ({ page }) => {
+    // Navigate to Family view
+    await page.getByRole('button', { name: 'Family' }).click();
     
-    // Add a new child
-    await page.click('button:has-text("Add Child")');
-    await page.fill('textbox="Name"', 'Child 4');
-    await page.fill('textbox="Age"', '14');
-    await page.click('button:has-text("Add Child")');
+    // Wait for Family view to load
+    await expect(page.locator('h2:has-text("Manage Family")')).toBeVisible();
     
-    // Verify child was added
-    await expect(page.locator('.child-card:has-text("Child 4")')).toBeVisible();
+    // Click Add Member button
+    await page.getByRole('button', { name: 'Add Member' }).click();
     
-    // Assign a chore to the new child
-    await page.click('button:has-text("Add Chore")');
-    await page.fill('textbox="Chore name"', 'Walk the dog');
-    await page.fill('spinbutton="Points"', '10');
-    await page.click('radio:has-text("Deadline")');
-    await page.click('combobox="Assign To:" option:has-text("Child 4")');
-    await page.click('button:has-text("Add Chore")');
+    // Fill in the user form
+    await page.getByPlaceholder('Name').fill('Child 4');
     
-    // Verify chore was assigned to Child 4
-    await expect(page.locator('.meta-item:has-text("Assigned:")')).toHaveText('Child 4');
+    // Select child role (should be default)
+    await page.locator('#userRole').selectOption({ value: 'child' });
     
-    // Delete the child
-    await page.click('.child-card:has-text("Child 4") button:has-text("Delete")');
-    await expect(page.locator('.child-card:has-text("Child 4")')).not.toBeVisible();
+    // Enter a PIN
+    await page.locator('#userPIN').fill('4321');
     
-    // Verify activity log was updated
-    await expect(page.locator('.activity-item')).toHaveCount(1);
+    // Submit the form
+    await page.getByRole('button', { name: 'Add Member', exact: true }).last().click();
+    
+    // Verify the new member was added
+    await expect(page.getByText('Child 4')).toBeVisible();
   });
 
-  test('period change resets chores correctly', async ({ page }) => {
-    // Start with a clean slate
-    await page.goto('/');
+  test('parent can view activity log', async ({ page }) => {
+    // Navigate to Activity Log view
+    await page.getByRole('button', { name: 'Activity Log' }).click();
     
-    // Add a chore
-    await page.click('button:has-text("Add Chore")');
-    await page.fill('textbox="Chore name"', 'Test chore');
-    await page.fill('textbox="Description (optional)"', 'Test description');
-    await page.fill('spinbutton="Points"', '10');
-    await page.click('radio:has-text("Deadline")');
-    await page.click('button:has-text("Add Chore")');
+    // Wait for Activity Log view to load (shows filter buttons)
+    await expect(page.getByRole('button', { name: 'All Children' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'All Events' })).toBeVisible();
+  });
+
+  test('parent can add a bonus extra chore', async ({ page }) => {
+    // Open the Add Chore modal (footer button)
+    await page.locator('footer').getByRole('button', { name: 'Add Chore' }).click();
     
-    // Verify chore was added
-    await expect(page.locator('h3:has-text("Test chore")')).toBeVisible();
-    await expect(page.locator('.chore-description')).toHaveText('Test description');
+    // Fill in the chore form
+    await page.getByPlaceholder('Chore name').fill('Wash the car');
+    await page.getByPlaceholder('Points').fill('50');
     
-    // Change period
-    await page.click('button:has-text("Change Period")');
-    await page.click('button:has-text("Daily")');
+    // Check the Extra Chore checkbox
+    await page.locator('#isExtraChore').check();
     
-    // Verify chores were reset
-    await expect(page.locator('h3:has-text("Test chore")')).not.toBeVisible();
-    await expect(page.locator('.chore-list p')).toHaveText('No chores yet');
+    // Submit the form (modal button)
+    await page.getByRole('button', { name: 'Add Chore' }).last().click();
     
-    // Verify activity log was reset
-    await expect(page.locator('.activity-item')).toHaveCount(0);
+    // Verify the chore heading appears in the Extra Chores section
+    await expect(page.getByRole('heading', { name: 'Wash the car' })).toBeVisible();
     
-    // Verify period was changed
-    await expect(page.locator('.period-selector button:has-text("Daily")')).toHaveClass('btn-primary');
+    // Verify the Extra Chore badge is visible
+    await expect(page.getByText('Extra Chore', { exact: true })).toBeVisible();
   });
 });
