@@ -106,18 +106,8 @@ const App: React.FC = () => {
     setShowPinModal(true);
   };
 
-  const [chores, setChores] = useLocalStorage<Chore[]>('chore-champ-chores', [
-    { id: 1, name: 'Tidy up your room', points: 20, status: ChoreStatus.Incomplete, requiresApproval: true, recurrence: ChoreRecurrence.Daily, assignedTo: 2, description: "Put all toys in the toy box, make your bed, and put dirty clothes in the hamper." },
-    { id: 2, name: 'Do homework', points: 25, status: ChoreStatus.Incomplete, requiresApproval: false, recurrence: ChoreRecurrence.Daily, assignedTo: 2 },
-    { id: 3, name: 'Feed the pet', points: 10, status: ChoreStatus.Completed, requiresApproval: false, recurrence: ChoreRecurrence.Daily },
-    { id: 4, name: 'Help with dinner', points: 15, status: ChoreStatus.Incomplete, requiresApproval: false, recurrence: ChoreRecurrence.None, description: "Help set the table before dinner." },
-  ]);
-  const [rewards, setRewards] = useLocalStorage<Reward[]>('chore-champ-rewards', [
-    { id: 1, name: '1 hour of screen time', points: 50 },
-    { id: 2, name: 'A trip to the park', points: 100 },
-    { id: 3, name: 'Choose a movie for movie night', points: 75 },
-    { id: 4, name: 'One scoop of ice cream', points: 30 },
-  ]);
+  const [chores, setChores] = useLocalStorage<Chore[]>('chore-champ-chores', []);
+  const [rewards, setRewards] = useLocalStorage<Reward[]>('chore-champ-rewards', []);
   const [pointRequests, setPointRequests] = useLocalStorage<PointRequest[]>('chore-champ-requests', []);
   const [notifications, setNotifications] = useLocalStorage<Notification[]>('chore-champ-notifications', []);
 
