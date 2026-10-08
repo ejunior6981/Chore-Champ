@@ -24,7 +24,7 @@ function checkRateLimit(key: string): boolean {
 }
 
 // POST /api/points - Add points with authorization
-export async function onRequestPostPoints(event: { cookie: { 'session-token'?: string } }, params: { body: string | object }) {
+export async function onRequestPostPoints(event: any, params: { body: string | object }) {
   const token = getCookie(event, 'session-token');
   
   if (!token) {
@@ -88,7 +88,7 @@ export async function onRequestPostPoints(event: { cookie: { 'session-token'?: s
 }
 
 // POST /api/rewards - Redeem reward with authorization
-export async function onRequestPostRewards(event: { cookie: { 'session-token'?: string } }, params: { body: string | object }) {
+export async function onRequestPostRewards(event: any, params: { body: string | object }) {
   const token = getCookie(event, 'session-token');
   
   if (!token) {

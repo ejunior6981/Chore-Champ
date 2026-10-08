@@ -17,8 +17,8 @@ test.describe('Chore Management End-to-End Flow', () => {
     // Verify chore was added
     await expect(page.locator('h3:has-text("Wash the dishes")')).toBeVisible();
     await expect(page.locator('.chore-description')).toHaveText('After dinner cleanup');
-    await expect(page.locator('.chore-card').first).toHaveText('15');
-    await expect(page.locator('.chore-card').first).toHaveText('Alex');
+    await expect(page.locator('.chore-card').first).toHaveTextContent('15');
+    await expect(page.locator('.chore-card').first).toHaveTextContent('Alex');
     
     // Edit chore to change points
     await page.click('button:has-text("Edit")');
@@ -26,7 +26,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     await page.click('button:has-text("Save Changes")');
     
     // Verify points was updated
-    await expect(page.locator('.chore-card').first).toHaveText('20');
+    await expect(page.locator('.chore-card').first).toHaveTextContent('20');
     
     // Delete the chore
     await page.click('button:has-text("Delete")');
@@ -92,7 +92,7 @@ test.describe('Chore Management End-to-End Flow', () => {
     await page.click('button:has-text("Add Chore")');
     
     // Verify weekly chore was added
-    await expect(page.locator('.chore-card').first).toHaveText('Weekly');
+    await expect(page.locator('.chore-card').first).toHaveTextContent('Weekly');
     
     // Edit chore to change description
     await page.click('button:has-text("Edit")');

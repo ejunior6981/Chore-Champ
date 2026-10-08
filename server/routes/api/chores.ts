@@ -25,7 +25,7 @@ function checkRateLimit(key: string): boolean {
 }
 
 // GET /api/chores - Get chores for authenticated user
-export async function onRequestGetChores(event: { cookie: { 'session-token'?: string } }) {
+export async function onRequestGetChores(event: any) {
   const token = getCookie(event, 'session-token');
   
   if (!token) {
@@ -47,7 +47,7 @@ export async function onRequestGetChores(event: { cookie: { 'session-token'?: st
 }
 
 // POST /api/chores - Create chore with authorization check
-export async function onRequestPostChores(event: { cookie: { 'session-token'?: string } }, params: { body: string | object }) {
+export async function onRequestPostChores(event: any, params: { body: string | object }) {
   const token = getCookie(event, 'session-token');
   
   if (!token) {
@@ -122,7 +122,7 @@ export async function onRequestPostChores(event: { cookie: { 'session-token'?: s
 }
 
 // DELETE /api/chores/:id - Delete chore with authorization
-export async function onRequestDeleteChores(event: { cookie: { 'session-token'?: string } }, params: { params: { id: string } }) {
+export async function onRequestDeleteChores(event: any, params: { params: { id: string } }) {
   const token = getCookie(event, 'session-token');
   
   if (!token) {
@@ -150,7 +150,7 @@ export async function onRequestDeleteChores(event: { cookie: { 'session-token'?:
 }
 
 // GET /api/users - Get users (parent can see all, child sees only their info)
-export async function onRequestGetUsers(event: { cookie: { 'session-token'?: string } }) {
+export async function onRequestGetUsers(event: any) {
   const token = getCookie(event, 'session-token');
   
   if (!token) {
@@ -172,7 +172,7 @@ export async function onRequestGetUsers(event: { cookie: { 'session-token'?: str
 }
 
 // POST /api/users - Create user (parent only)
-export async function onRequestPostUsers(event: { cookie: { 'session-token'?: string } }, params: { body: string | object }) {
+export async function onRequestPostUsers(event: any, params: { body: string | object }) {
   const token = getCookie(event, 'session-token');
   
   if (!token) {

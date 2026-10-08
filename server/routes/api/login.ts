@@ -15,7 +15,7 @@ users.set(2, { id: 2, name: 'Alex', age: 10, role: 'child', pin: '1234' });
 users.set(3, { id: 3, name: 'Emma', age: 8, role: 'child', pin: '5678' });
 
 // Login with PIN verification
-export async function onRequestPostLogin(event: { cookie: { 'chore-champ-session-token'?: string } }, params: { body: string | object }) {
+export async function onRequestPostLogin(event: any, params: { body: string | object }) {
   const body = await readBody(event);
   const data = typeof body === 'string' ? JSON.parse(body) : body;
   
@@ -77,7 +77,7 @@ export async function onRequestPostLogin(event: { cookie: { 'chore-champ-session
 }
 
 // Logout - clear session
-export async function onRequestPostLogout(event: { cookie: { 'chore-champ-session-token'?: string } }) {
+export async function onRequestPostLogout(event: any) {
   const token = getCookie(event, 'chore-champ-session-token');
   
   if (token) {
