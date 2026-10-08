@@ -14,22 +14,3 @@ root.render(
     <App />
   </React.StrictMode>
 );
-
-// Register service worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
-    try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('Service Worker registered:', registration);
-
-      // Listen for messages from service worker
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data?.type === 'GRANTED_PERMISSION') {
-          console.log('Notification permission granted');
-        }
-      });
-    } catch (error) {
-      console.error('Service Worker registration failed:', error);
-    }
-  });
-}

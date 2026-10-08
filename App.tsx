@@ -1,6 +1,6 @@
 
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, Notification, User } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import Header from './components/Header';
@@ -13,8 +13,6 @@ import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, P
 import AvatarDisplay from './components/AvatarDisplay';
 
 const App: React.FC = () => {
-  const [isServiceWorkerRegistered, setIsServiceWorkerRegistered] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
   const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', [
     { id: 1, name: 'Parent', role: 'parent', avatar: null, points: 0 },
     { id: 2, name: 'Alex', role: 'child', avatar: 'bot', points: 100 },
@@ -61,63 +59,6 @@ const App: React.FC = () => {
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('child');
 
-  // Initialize PWA and notification permissions
-  useEffect(() => {
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
-        try {
-          const registration = await navigator.serviceWorker.register('/sw.js');
-          console.log('Service Worker registered:', registration);
-          setIsServiceWorkerRegistered(true);
-          
-          // Request notification permission on first load
-          if ('Notification' in window && Notification.permission === 'default') {
-            requestNotificationPermission();
-          }
-        } catch (error) {
-          console.error('Service Worker registration failed:', error);
-        }
-      });
-    }
-  }, []);
-
-  const requestNotificationPermission = async () => {
-    if ('Notification' in window && 'serviceWorker' in navigator) {
-      try {
-        const permission = await Notification.requestPermission();
-        setNotificationPermission(permission);
-        if (permission === 'granted') {
-          // Send message to service worker to show a welcome notification
-          const sw = await navigator.serviceWorker.getRegistration();
-          if (sw?.active) {
-            sw.active.postMessage({ type: 'GRANTED_PERMISSION' });
-          }
-        }
-      } catch (error) {
-        console.error('Failed to request notification permission:', error);
-      }
-    }
-  };
-
-  const unsubscribeFromNotification = (notificationId: number) => {
-    if ('serviceWorker' in navigator && isServiceWorkerRegistered) {
-      navigator.serviceWorker.ready.then(registration => {
-        registration.unregisterNotification(notificationId);
-      });
-    }
-  };
-
-  // Listen for permission changes from service worker
-  useEffect(() => {
-    if (isServiceWorkerRegistered && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data?.type === 'GRANTED_PERMISSION') {
-          setNotificationPermission('granted');
-        }
-      });
-    }
-  }, [isServiceWorkerRegistered]);
 
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId)!, [users, currentUserId]);
   const childUsers = useMemo(() => users.filter(u => u.role === 'child'), [users]);
@@ -132,21 +73,7 @@ const App: React.FC = () => {
       read: false,
     };
     setNotifications(prev => [newNotification, ...prev]);
-
-    // Send browser push notification if permission granted
-    if (notificationPermission === 'granted' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(registration => {
-        const title = targetRole === 'parent' ? '👨‍👩‍👧‍👦 Chore Champ Alert!' : '🎉 Chore Champ Alert!';
-        registration.showNotification(title, {
-          body: message,
-          icon: '/icon-192.png',
-          badge: '/icon-192.png',
-          tag: `notification-${Date.now()}`,
-          requireInteraction: false,
-        });
-      });
-    }
-  }, [setNotifications, notificationPermission]);
+  }, [setNotifications]);
 
   const handleUserChange = (userId: number) => {
     setCurrentUserId(userId);
@@ -562,11 +489,6 @@ const App: React.FC = () => {
         isNotificationsOpen={isNotificationsOpen}
         notifications={currentUserNotifications}
         onClearNotifications={handleClearNotifications}
-        isServiceWorkerRegistered={isServiceWorkerRegistered}
-        onInstallPWA={() => window.location.reload()}
-        showInstallPrompt={isServiceWorkerRegistered}
-        notificationPermission={notificationPermission}
-        onToggleNotificationPermission={requestNotificationPermission}
       />
       <main className="flex-grow container mx-auto p-4 pb-28">
         <div className="bg-white/70 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6">

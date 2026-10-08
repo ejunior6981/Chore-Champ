@@ -1,15 +1,32 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#6366f1" />
-    <meta name="description" content="A chore tracking and reward app for families" />
     <title>Chore Champ</title>
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
-    <link rel="apple-touch-icon" href="/icon-192.svg" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="data:application/manifest+json,{
+      &quot;name&quot;: &quot;Chore Champ&quot;,
+      &quot;short_name&quot;: &quot;ChoreChamp&quot;,
+      &quot;start_url&quot;: &quot;.&quot;,
+      &quot;display&quot;: &quot;standalone&quot;,
+      &quot;background_color&quot;: &quot;#f0f9ff&quot;,
+      &quot;theme_color&quot;: &quot;#0ea5e9&quot;,
+      &quot;description&quot;: &quot;A chore reward system for children.&quot;,
+      &quot;icons&quot;: [
+        {
+          &quot;src&quot;: &quot;https://picsum.photos/192/192&quot;,
+          &quot;sizes&quot;: &quot;192x192&quot;,
+          &quot;type&quot;: &quot;image/png&quot;
+        },
+        {
+          &quot;src&quot;: &quot;https://picsum.photos/512/512&quot;,
+          &quot;sizes&quot;: &quot;512x512&quot;,
+          &quot;type&quot;: &quot;image/png&quot;
+        }
+      ]
+    }">
     <style>
       body {
         -webkit-tap-highlight-color: transparent;
@@ -26,7 +43,7 @@
 }
 </script>
 <link rel="stylesheet" href="/index.css">
-  </head>
+</head>
   <body class="bg-sky-50 antialiased text-slate-800">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
