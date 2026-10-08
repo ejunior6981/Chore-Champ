@@ -168,7 +168,7 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ events, users }) => {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-xs text-slate-500">{user?.name || event.userName}</p>
-                  <p className="text-xs text-slate-400">{new Date(event.timestamp).toLocaleString()}</p>
+                  <p className="text-xs text-slate-400">{new Date(event.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                   {event.points !== 0 && (
                     <p className={`text-sm font-bold ${event.points > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                       {event.points > 0 ? '+' : ''}{event.points} pts
