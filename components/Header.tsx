@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { StarIcon, BellIcon, ChevronDownIcon } from './icons';
 import { User, Notification } from '../types';
@@ -16,9 +15,14 @@ interface HeaderProps {
   isNotificationsOpen: boolean;
   notifications: Notification[];
   onClearNotifications: () => void;
+  isServiceWorkerRegistered?: boolean;
+  onInstallPWA?: () => void;
+  showInstallPrompt?: boolean;
+  notificationPermission?: NotificationPermission | null;
+  onToggleNotificationPermission?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserChange, onEditProfile, unreadNotificationsCount, onToggleNotifications, isNotificationsOpen, notifications, onClearNotifications }) => {
+const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserChange, onEditProfile, unreadNotificationsCount, onToggleNotifications, isNotificationsOpen, notifications, onClearNotifications, isServiceWorkerRegistered = false, onInstallPWA, showInstallPrompt = false, notificationPermission = null, onToggleNotificationPermission }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -70,6 +74,30 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                     />
                 )}
             </div>
+
+            {/* PWA Install Prompt */}
+            {showInstallPrompt && (
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 text-sm font-medium">
+                    <span>💡 Install Chore Champ to your home screen for the best experience!</span>
+                    <button 
+                        onClick={onInstallPWA}
+                        className="ml-2 bg-white/20 hover:bg-white/30 text-white text-xs px-2 py-1 rounded transition-colors"
+                    >
+                        Install
+                    </button>
+                </div>
+            )}
+
+            {/* Notification Permission Toggle */}
+            {notificationPermission !== 'granted' && notificationPermission !== 'denied' && isServiceWorkerRegistered && (
+                <button 
+                    onClick={onToggleNotificationPermission}
+                    className="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 text-sm font-medium hover:bg-white/20 transition-colors"
+                    title="Enable push notifications"
+                >
+                    🔔 Enable Notifications
+                </button>
+            )}
 
             <div className="relative" ref={userMenuRef}>
                  <button

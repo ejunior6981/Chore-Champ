@@ -9,6 +9,7 @@
 - **Lucide React** for iconography
 - **Vite** as the build tool and dev server
 - **Supabase** or **Neon** as database providers (via Nitro server layer when needed)
+- **vite-plugin-pwa** for PWA support and service worker management
 
 ## Library Usage Rules
 
@@ -53,3 +54,14 @@
 - Add comments only where logic isn't self-evident
 - Avoid TODO comments and placeholder implementations
 - Delete unused code completely — don't leave _vars or partial implementations
+
+### PWA and Push Notifications
+- The app supports PWA with `vite-plugin-pwa` for automatic service worker generation and management
+- SVG icons are used for PWA (icon-192.svg, icon-512.svg) with the Chore Champ logo
+- Push notifications are sent via the service worker using `navigator.serviceWorker.showNotification()`
+- Notification permissions are requested on first load and can be toggled via the header button
+- Use `@web-push/web-push` for service worker push message handling in production
+- PWA install prompts appear automatically when the service worker is registered
+- Notification permission state is passed to the Header component for conditional UI
+- Browser push notifications appear alongside in-app notifications for a seamless experience
+- The service worker handles caching, offline support, and push notification delivery
