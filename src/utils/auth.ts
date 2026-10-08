@@ -1,8 +1,9 @@
-import { authState } from '../../server/routes/api/auth';
+import { getCookie } from 'nitro/h3';
+import { verifySessionToken } from '../../server/routes/api/auth';
 
 // Auth utility for client-side session management
-// SECURITY: All authentication happens server-side
-// Client never stores PINs or sensitive data in localStorage
+// SECURITY: All authentication happens server-side via httpOnly cookies
+// Client-side state is minimal and never stores sensitive data
 
 export interface AuthState {
   isAuthenticated: boolean;

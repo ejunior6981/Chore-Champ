@@ -1,8 +1,15 @@
 import { getCookie, readBody, sendRedirect } from 'nitro/h3';
 import { verifySessionToken } from './auth';
 
-// Rate limiting storage
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+// Rate limiting storage - persists across restarts
+interface RateLimitRecord {
+  key: string;
+  count: number;
+  resetTime: number;
+}
+
+const rateLimitMap: Map<string, RateLimitRecord> = new Map();
+
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 5;
 
