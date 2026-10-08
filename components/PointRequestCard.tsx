@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { PointRequest, PointRequestStatus } from '../types.ts';
+import { PointRequest, PointRequestStatus } from '../types';
 import { StarIcon } from './icons';
 
 interface PointRequestCardProps {

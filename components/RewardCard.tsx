@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Reward } from '../types.ts';
+import { Reward } from '../types';
 import { StarIcon, GiftIcon } from './icons';
 
 interface RewardCardProps {

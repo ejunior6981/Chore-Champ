@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Notification } from '../types.ts';
+import { Notification } from '../types';
 import { BellIcon } from './icons';
 
 interface NotificationPanelProps {
