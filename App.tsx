@@ -137,9 +137,7 @@ const App: React.FC = () => {
   const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', allUsers);
   const [currentUserIdStr, setCurrentUserIdStr] = useLocalStorage<string | null>('chore-champ-currentUser', null);
 
-  const currentUser = useMemo(() => users.find(u => u.id === currentUserIdStr), [users, currentUserIdStr]);
-  const childUsers = useMemo(() => users.filter(u => u.role === 'child'), [users]);
-  const parentUsers = useMemo(() => users.filter(u => u.role === 'parent'), [users]);
+  const currentUserFromStorage = useMemo(() => users.find(u => u.id === currentUserIdStr), [users, currentUserIdStr]);
 
   // Validate PIN
   const validatePin = (entered: string): boolean => {
