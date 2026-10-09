@@ -87,7 +87,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // HTML and JSON: network-first with cache fallback
-  if (request.headers.get('accept')?.includes('text/html') || 
+  if (request.headers.get('accept')?.includes('text/html') ||
       request.headers.get('accept')?.includes('application/json')) {
     event.respondWith(networkFirst(request));
     return;
@@ -203,6 +203,24 @@ self.addEventListener('message', (event) => {
     console.log('[SW] Sync data received');
   }
 });
+
+// Background sync event
+if ('SyncManager' in window) {
+  self.addEventListener('sync', (event) => {
+    console.log('[SW] Background sync event:', event.tag);
+    
+    if (event.tag === 'chore-champ-sync') {
+      // Trigger sync in main thread
+      event.waitUntil(
+        self.clients.matchAll({ type: 'window' }).then((clients) => {
+          clients.forEach((client) => {
+            client.postMessage({ type: 'SYNC_NOW' });
+          });
+        })
+      );
+    }
+  });
+}
 
 // Periodic sync (optional)
 // self.addEventListener('periodicsync', (event) => {

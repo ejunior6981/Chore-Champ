@@ -6,12 +6,14 @@
 import React from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import AdminLayout from '../layout';
-import UsersView from '../views/UsersView';
-import RewardsView from '../views/RewardsView';
-import ChoresView from '../views/ChoresView';
-import RequestsView from '../views/RequestsView';
-import SettingsView from '../views/SettingsView';
-import NotificationsView from '../views/NotificationsView';
+import {
+  FamilyManagement,
+  RewardsView,
+  ChoresView,
+  RequestsView,
+  SettingsView,
+  NotificationsView,
+} from '../views';
 
 // Placeholder views (to be implemented)
 const UsersViewPlaceholder: React.FC = () => (
@@ -217,31 +219,31 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <UsersViewPlaceholder />,
+        element: <FamilyManagement />,
       },
       {
         path: 'users',
-        element: <UsersViewPlaceholder />,
+        element: <FamilyManagement />,
       },
       {
         path: 'rewards',
-        element: <RewardsViewPlaceholder />,
+        element: <RewardsView />,
       },
       {
         path: 'chores',
-        element: <ChoresViewPlaceholder />,
+        element: <ChoresView />,
       },
       {
         path: 'requests',
-        element: <RequestsViewPlaceholder />,
+        element: <RequestsView />,
       },
       {
         path: 'settings',
-        element: <SettingsViewPlaceholder />,
+        element: <SettingsView />,
       },
       {
         path: 'notifications',
-        element: <NotificationsViewPlaceholder />,
+        element: <NotificationsView />,
       },
     ],
   },
