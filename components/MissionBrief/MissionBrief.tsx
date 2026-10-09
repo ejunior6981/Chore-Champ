@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Chore, ChoreStatus, ChoreRecurrence, User } from '../..//types';
+import { Chore, ChoreStatus, ChoreRecurrence, User } from '../../types';
 import { StarIcon, CheckCircleIcon, RefreshIcon, InformationCircleIcon, PencilIcon, FireIcon, ShieldCheckIcon } from '../icons';
 import OrbitBadge from './OrbitBadge';
 
@@ -53,37 +53,31 @@ const MissionBrief: React.FC<MissionBriefProps> = ({ chore, onStateChange, curre
 
   return (
     <div className={`relative transition-all duration-300 rounded-xl shadow-lg flex flex-col p-4 ${cardStyles[chore.status]}`}>
-      <RecurrenceBadge recurrence={chore.recurrence} />
-      <div className="flex-grow">
-        <div className="flex items-start justify-between">
-           <h3 className={`font-bold text-lg pr-2 uppercase tracking-wide ${titleStyles[chore.status]}`}>{chore.name}</h3>
-            <div className="flex items-center space-x-2 flex-shrink-0">
-               {chore.description && (
-                <button onClick={() => setIsDescriptionVisible(!isDescriptionVisible)} className="text-slate-400 hover:text-[#7C3AED]">
-                  <InformationCircleIcon className="w-6 h-6" />
-                </button>
-              )}
-              {currentUser.role === 'parent' && (
-                <button onClick={() => onEdit(chore)} className="text-slate-400 hover:text-[#7C3AED]">
-                  <PencilIcon className="w-5 h-5" />
-                </button>
-              )}
-           </div>
-        </div>
-
-        {isDescriptionVisible && chore.description && (
-          <p className="text-sm text-slate-600 mt-2 bg-slate-100 p-2 rounded-md">{chore.description}</p>
-        )}
-        
-        <div className="flex items-center space-x-4 mt-2">
-          <div className="flex items-center space-x-1 text-[#FBBF24]">
-            <StarIcon className="w-5 h-5" />
-            <span className="font-bold text-lg">{chore.points} FUEL</span>
-          </div>
-          {chore.streak > 0 && (
-            <OrbitBadge streak={chore.streak} />
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center space-x-2 flex-grow">
+          <h3 className={`font-bold text-lg uppercase tracking-wide ${titleStyles[chore.status]}`}>{chore.name}</h3>
+          {chore.description && (
+            <button onClick={() => setIsDescriptionVisible(!isDescriptionVisible)} className="text-slate-400 hover:text-[#7C3AED]" title="Toggle description">
+              <InformationCircleIcon className="w-6 h-6" />
+            </button>
+          )}
+          {currentUser.role === 'parent' && (
+            <button onClick={() => onEdit(chore)} className="text-slate-400 hover:text-[#7C3AED] p-1" title="Edit mission">
+              <PencilIcon className="w-5 h-5" />
+            </button>
           )}
         </div>
+        <RecurrenceBadge recurrence={chore.recurrence} />
+      </div>
+
+      <div className="flex items-center space-x-4 mt-2">
+        <div className="flex items-center space-x-1 text-[#FBBF24]">
+          <StarIcon className="w-5 h-5" />
+          <span className="font-bold text-lg">{chore.points} FUEL</span>
+        </div>
+        {chore.streak > 0 && (
+          <OrbitBadge streak={chore.streak} />
+        )}
       </div>
       
       <div className="mt-4">
