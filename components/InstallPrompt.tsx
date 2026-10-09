@@ -10,7 +10,7 @@ interface InstallPromptProps {
  */
 const InstallPrompt: React.FC<InstallPromptProps> = ({ onInstall }) => {
   const [showPrompt, setShowPrompt] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  let deferredPrompt: any = null;
 
   useEffect(() => {
     // Check if PWA is already installed

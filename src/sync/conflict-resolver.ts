@@ -25,7 +25,7 @@ export interface ConflictResolution {
 export class ConflictResolver {
   private STORAGE_KEY = 'chore-champ-conflicts';
 
-  private conflicts: Conflict[] = [];
+  public conflicts: Conflict[] = [];
 
   /**
    * Detect conflicts between local and remote data

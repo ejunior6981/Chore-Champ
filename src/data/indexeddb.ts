@@ -40,7 +40,7 @@ export async function openDB(config: IndexedDBConfig): Promise<IDBDatabase> {
     };
 
     request.onsuccess = (event) => {
-      const db = (event.target as IDBOpenDBResult).result;
+      const db = (event.target as any).result;
       
       // Create stores if they don't exist
       if (!db.objectStoreNames.contains('users')) {
@@ -87,7 +87,7 @@ export async function openDB(config: IndexedDBConfig): Promise<IDBDatabase> {
     };
 
     request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBResult).result;
+      const db = (event.target as any).result;
       console.log('IndexedDB database upgraded to version', config.version);
     };
   });

@@ -34,7 +34,7 @@ const MissionControlHeader: React.FC<MissionControlHeaderProps> = ({
       <div className="container mx-auto flex items-center justify-between">
         {/* Left Section */}
         <div className="flex items-center gap-3">
-          <AvatarDisplay avatar={currentUser?.avatar} sizeClass="w-12 h-12" />
+          <AvatarDisplay avatarId={currentUser?.avatar} sizeClass="w-12 h-12" />
           <div>
             <div className="font-bold text-lg text-slate-800 dark:text-slate-100">
               {currentUser?.name}

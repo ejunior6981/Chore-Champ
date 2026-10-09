@@ -19,6 +19,7 @@ export interface Session {
   role: 'parent' | 'child' | null;
   isAuthenticated: boolean;
   lastActivity: number;
+  expiresAt: number | null;
 }
 
 export interface User {

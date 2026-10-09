@@ -1,4 +1,4 @@
-import type { Notification } from './types';
+import type { Notification } from './notification';
 
 export interface Notification extends Notification {
   id: string;

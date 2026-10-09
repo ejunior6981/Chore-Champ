@@ -70,7 +70,7 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                     <NotificationPanel
                         notifications={notifications}
                         onClose={onToggleNotifications}
-                        onClear={onClearNotifications}
+                        onClearRead={onClearNotifications}
                     />
                 )}
             </div>
@@ -80,7 +80,7 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                     onClick={() => setIsUserMenuOpen(prev => !prev)}
                     className="flex items-center space-x-2 text-white bg-white/20 hover:bg-white/30 rounded-full pl-3 pr-2 py-2 text-sm font-medium transition-colors"
                 >
-                    <AvatarDisplay avatar={currentUser?.avatar} sizeClass="w-8 h-8" />
+                    <AvatarDisplay avatarId={currentUser?.avatar} sizeClass="w-8 h-8" />
                     <span className="font-semibold">{currentUser?.name || '...'}</span>
                     <ChevronDownIcon className="w-5 h-5 opacity-70"/>
                 </button>
@@ -94,7 +94,7 @@ const Header: React.FC<HeaderProps> = ({ points, currentUser, allUsers, onUserCh
                                         onClick={() => handleUserSelect(user.id)}
                                         className={`w-full text-left flex items-center space-x-3 p-3 transition-colors ${currentUser?.id === user.id ? 'bg-sky-50 text-sky-700 font-bold' : 'text-slate-700 hover:bg-slate-100'}`}
                                     >
-                                        <AvatarDisplay avatar={user.avatar} sizeClass="w-8 h-8" />
+                                        <AvatarDisplay avatarId={user.avatar} sizeClass="w-8 h-8" />
                                         <span>{user.name}</span>
                                     </button>
                                 </li>

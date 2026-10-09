@@ -116,7 +116,7 @@ export class SyncManager {
       console.error('Sync failed:', error);
       
       // Mark failed operations
-      for (const op of operations) {
+      for (const op of this.state.pendingOperations) {
         if (op.status === 'pending') {
           op.status = 'failed';
           op.error = String(error);

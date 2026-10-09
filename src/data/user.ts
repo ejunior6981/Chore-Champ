@@ -70,6 +70,7 @@ export async function createUser(input: CreateUserInput): Promise<User> {
   const user: User = {
     id: crypto.randomUUID(),
     ...input,
+    points: 0,
     settings: {
       themeMode: 'system',
       notificationsEnabled: true,

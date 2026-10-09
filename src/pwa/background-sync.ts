@@ -192,8 +192,8 @@ export class BackgroundSyncManager {
   /**
    * Handle background sync event
    */
-  public async handleSyncEvent(event: SyncEvent): Promise<void> {
-    console.log('Background sync event:', event.tag);
+  public async handleSyncEvent(event: any): Promise<void> {
+    console.log('Background sync event:', (event as any).tag);
     
     // Execute all enabled tasks
     for (const task of this.tasks) {

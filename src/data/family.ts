@@ -33,6 +33,7 @@ export interface CreateFamilyMemberInput {
   name: string;
   role: 'parent' | 'child';
   avatarId: string;
+  points?: number;
 }
 
 export interface UpdateFamilyMemberInput {

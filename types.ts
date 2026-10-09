@@ -46,6 +46,12 @@ export interface User {
   role: UserRole;
   avatar: string | null;
   points: number;
+  familyId: string;
+  email: string;
+  passwordHash: string;
+  avatarId: string;
+  pinHash?: string;
+  settings?: string;
 }
 
 export enum PointRequestStatus {
