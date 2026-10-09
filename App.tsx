@@ -1,44 +1,35 @@
 
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, User } from './types';
 import type { Notification } from './types';
-import { useLocalStorage, useStorageReset } from './hooks/useLocalStorage';
+import AvatarDisplay from './components/AvatarDisplay';
+import ThemeToggle from './components/ThemeToggle';
+import InstallPrompt from './components/InstallPrompt';
 import MissionControlHeader from './components/MissionControlHeader/MissionControlHeader';
 import MissionBrief from './components/MissionBrief/MissionBrief';
 import RewardsVault from './components/RewardsVault/RewardsVault';
 import PointRequestCard from './components/PointRequestCard';
 import Modal from './components/Modal';
 import ProfileModal from './components/ProfileModal';
-import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, PencilIcon, TrashIcon, LockIcon, RefreshCwIcon, RocketIcon } from './components/icons';
-import AvatarDisplay from './components/AvatarDisplay';
+import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, PencilIcon, TrashIcon, LockIcon, RocketIcon, SunIcon, MoonIcon } from './components/icons';
+import AvatarSelection from './components/AvatarSelection';
+import { getIndexedDB } from './src/data/indexeddb';
+import { getAuthManager } from './src/auth/auth-manager';
+import { initializeAuth } from './src/auth/auth-manager';
+import { initializeSyncManager } from './src/sync/sync-manager';
+import { initializeOfflineQueue } from './src/sync/offline-queue';
 
 const DEFAULT_PIN = '6981';
 
+// Initial test data
+const initialUsers: User[] = [
+  { id: 1, name: 'Parent', role: 'parent', avatar: 'boy-robot', points: 0 },
+  { id: 2, name: 'Alex', role: 'child', avatar: 'boy-robot', points: 100 },
+];
+
 const App: React.FC = () => {
-  const resetStorage = useStorageReset();
-
-  // Register service worker for PWA support
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(registration => {
-            console.log('SW registered:', registration);
-          })
-          .catch(error => {
-            console.log('SW registration failed:', error);
-          });
-      });
-    }
-  }, []);
-
-  // Orb pulse intensity based on pending chores (would be passed as prop)
-  const pendingChores = 0;
-  const pulseIntensity = Math.min(pendingChores * 2, 100);
-
   // PIN Authentication
-  const [pin, setPin] = useLocalStorage<string>('chore-champ-pin', DEFAULT_PIN);
+  const [pin, setPin] = useState<string>(DEFAULT_PIN);
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [isPinLocked, setIsPinLocked] = useState<boolean>(false);
   const [showPinModal, setShowPinModal] = useState<boolean>(false);
@@ -46,46 +37,104 @@ const App: React.FC = () => {
   const [newPin, setNewPin] = useState<string>('');
   const [confirmNewPin, setConfirmNewPin] = useState<string>('');
 
-  // Initialize users with PIN check
-  const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', [
-    { id: 1, name: 'Parent', role: 'parent', avatar: null, points: 0 },
-    { id: 2, name: 'Alex', role: 'child', avatar: 'bot', points: 100 },
-  ]);
+  // Initialize IndexedDB
+  const [db, setDb] = useState<any>(null);
+  const [isDbInitialized, setIsDbInitialized] = useState(false);
 
-  const [currentUserId, setCurrentUserId] = useLocalStorage<number | null>('chore-champ-currentUser', null);
+  // Initialize auth
+  const [authManager, setAuthManager] = useState<any>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>(initialUsers);
 
-  // Check if we need to set initial user after users are loaded
+  // Initialize sync
+  const [syncManager, setSyncManager] = useState<any>(null);
+  const [offlineQueue, setOfflineQueue] = useState<any>(null);
+
+  // Theme state
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
+
+  // Family selection state
+  const [showFamilySelection, setShowFamilySelection] = useState(false);
+  const [familyMembers, setFamilyMembers] = useState<any[]>([]);
+
+  // Avatar selection state
+  const [showAvatarSelection, setShowAvatarSelection] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState<string>('boy-robot');
+
+  // Theme selection state
+  const [showThemeSelection, setShowThemeSelection] = useState(false);
+
+  // Initialize IndexedDB and auth
   useEffect(() => {
-    if (users.length > 0 && !currentUserId) {
-      // No current user set, default to parent
-      const parentUser = users.find(u => u.role === 'parent');
-      if (parentUser) {
-        setCurrentUserId(parentUser.id);
-      }
-    }
-  }, [users, currentUserId, setCurrentUserId]);
+    const initApp = async () => {
+      try {
+        // Initialize IndexedDB
+        const indexedDB = await initializeIndexedDB();
+        setDb(indexedDB);
+        setIsDbInitialized(true);
 
+        // Initialize auth
+        const authConfig = {
+          clientId: 'chore-champ-web',
+          apiDomain: process.env.NITRO_PREFIX || '',
+        };
+        const authManager = await initializeAuth(authConfig);
+        setAuthManager(authManager);
+
+        // Initialize sync
+        const syncManager = await initializeSyncManager();
+        setSyncManager(syncManager);
+
+        // Initialize offline queue
+        const offlineQueue = await initializeOfflineQueue();
+        setOfflineQueue(offlineQueue);
+
+        // Check for existing session
+        const session = await authManager.getCurrentSession();
+        if (session) {
+          setIsAuthenticated(true);
+          setCurrentUser(session.user || null);
+        }
+
+        console.log('App initialized');
+      } catch (error) {
+        console.error('Failed to initialize app:', error);
+      }
+    };
+
+    initApp();
+  }, []);
+
+  // Theme effect
+  useEffect(() => {
+    const html = document.documentElement;
+    if (theme === 'dark') {
+      html.classList.add('dark');
+    } else {
+      html.classList.remove('dark');
+    }
+  }, [theme]);
+
+  // PIN validation
   const validatePin = (entered: string): boolean => {
     return entered === pin;
   };
 
   const handlePinLogin = () => {
     if (validatePin(enteredPin)) {
-      // PIN is correct, allow access
       setIsPinLocked(false);
       setEnteredPin('');
       setShowPinModal(false);
     } else {
-      // PIN is incorrect
       setIsPinLocked(true);
       setEnteredPin('');
-      // Show error notification
       const newNotification: Notification = {
         id: Date.now(),
-        targetRole: 'parent',
         message: 'Incorrect PIN. Please try again.',
         timestamp: Date.now(),
         read: false,
+        targetRole: 'parent' as UserRole,
       };
       setNotifications(prev => [newNotification, ...prev]);
     }
@@ -104,12 +153,55 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    setCurrentUserId(null);
+    setIsAuthenticated(false);
+    setCurrentUser(null);
     setIsPinLocked(true);
     setEnteredPin('');
     setShowPinModal(true);
   };
 
+  // LocalStorage wrappers for backward compatibility
+  const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
+    const [value, setValue] = useState<T>(() => {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          return JSON.parse(saved) as T;
+        } catch (e) {
+          return defaultValue;
+        }
+      }
+      return defaultValue;
+    });
+
+    useEffect(() => {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (e) {
+        console.error('Failed to save value for key', key, e);
+      }
+    }, [key, value]);
+
+    return [value, setValue];
+  };
+
+  const useStorageReset = (): (() => void) => {
+    const resetStorage = () => {
+      const keysToKeep = ['chore-champ-users', 'chore-champ-pin'];
+      const allKeys = Object.keys(localStorage).filter(key => key.startsWith('chore-champ-')).sort();
+      const keysToRemove = allKeys.filter(key => !keysToKeep.includes(key));
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+      });
+    };
+    return resetStorage;
+  };
+
+  const resetStorage = useStorageReset();
+
+  // LocalStorage data for backward compatibility
+  const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', allUsers);
+  const [currentUserId, setCurrentUserId] = useLocalStorage<number | null>('chore-champ-currentUser', null);
   const [chores, setChores] = useLocalStorage<Chore[]>('chore-champ-chores', []);
   const [rewards, setRewards] = useLocalStorage<Reward[]>('chore-champ-rewards', []);
   const [pointRequests, setPointRequests] = useLocalStorage<PointRequest[]>('chore-champ-requests', []);
@@ -118,7 +210,6 @@ const App: React.FC = () => {
   const [activeView, setActiveView] = useState<View>(View.Chores);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState<'addChore' | 'editChore' | 'addReward' | 'addPoints' | 'requestPoints' | 'addUser' | 'editUser' | null>(null);
-
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
@@ -139,7 +230,6 @@ const App: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('child');
-
 
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId]);
   const childUsers = useMemo(() => users.filter(u => u.role === 'child'), [users]);
@@ -256,16 +346,14 @@ const App: React.FC = () => {
   const handleUserChange = (userId: number) => {
     const selectedUser = users.find(u => u.id === userId);
     if (selectedUser?.role === 'parent') {
-      // Parent users need PIN authentication
       setIsPinLocked(true);
       setEnteredPin('');
       setShowPinModal(true);
     } else {
-      // Non-parent users don't need PIN
       setIsPinLocked(false);
     }
     setCurrentUserId(userId);
-    setIsNotificationsOpen(false); // Close notifications on user switch
+    setIsNotificationsOpen(false);
     if (selectedUser?.role === 'child' && activeView === View.Requests) {
       setActiveView(View.Chores);
     }
@@ -286,18 +374,18 @@ const App: React.FC = () => {
       const childId = chore.assignedTo || currentUser.id;
       const child = users.find(u => u.id === childId);
 
-      if(child && child.role === 'child') {
-          setUsers(prev => prev.map(u => u.id === child.id ? {...u, points: u.points + chore.points} : u));
-           if (chore.status === ChoreStatus.PendingApproval) {
-            addNotification('child', `Your chore "${chore.name}" was approved! You earned ${chore.points} points.`);
-          }
+      if (child && child.role === 'child') {
+        setUsers(prev => prev.map(u => u.id === child.id ? { ...u, points: u.points + chore.points } : u));
+        if (chore.status === ChoreStatus.PendingApproval) {
+          addNotification('child', `Your chore "${chore.name}" was approved! You earned ${chore.points} points.`);
+        }
       }
 
       // Streak logic
       if (chore.recurrence === ChoreRecurrence.Daily || chore.recurrence === ChoreRecurrence.Weekly) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         let newStreak = chore.streak || 0;
         const lastCompleted = chore.lastCompletedDate ? new Date(chore.lastCompletedDate) : null;
         if (lastCompleted) {
@@ -309,38 +397,37 @@ const App: React.FC = () => {
             const yesterday = new Date(today);
             yesterday.setDate(today.getDate() - 1);
             if (lastCompleted.getTime() === yesterday.getTime()) {
-              newStreak++; // Continued streak
+              newStreak++;
             } else if (lastCompleted.getTime() < yesterday.getTime()) {
-              newStreak = 1; // Broken streak, starting new one
+              newStreak = 1;
             }
-            // If lastCompleted.getTime() === today.getTime(), streak is unchanged.
           } else {
-            newStreak = 1; // First ever completion
+            newStreak = 1;
           }
         } else if (chore.recurrence === ChoreRecurrence.Weekly) {
           if (lastCompleted) {
             const sevenDaysAgo = new Date(today);
             sevenDaysAgo.setDate(today.getDate() - 7);
             if (lastCompleted.getTime() >= sevenDaysAgo.getTime()) {
-              newStreak++; // Continued within the week
+              newStreak++;
             } else {
-              newStreak = 1; // Broken streak
+              newStreak = 1;
             }
           } else {
-            newStreak = 1; // First ever completion
+            newStreak = 1;
           }
         }
         updatedChore.streak = newStreak;
         updatedChore.lastCompletedDate = new Date().toISOString();
       }
     }
-    
+
     if (newStatus === ChoreStatus.PendingApproval) {
-        addNotification('parent', `A chore requires your approval: "${chore.name}".`);
+      addNotification('parent', `A chore requires your approval: "${chore.name}".`);
     }
 
     if (newStatus === ChoreStatus.Incomplete && chore.status === ChoreStatus.PendingApproval) {
-        addNotification('child', `Your chore "${chore.name}" was denied. Please try again.`);
+      addNotification('child', `Your chore "${chore.name}" was denied. Please try again.`);
     }
 
     setChores(prev => prev.map(c => c.id === choreId ? updatedChore : c));
@@ -354,51 +441,51 @@ const App: React.FC = () => {
 
     const childId = chore.assignedTo;
     if (childId) {
-        const child = users.find(u => u.id === childId);
-        if (child) {
-            setUsers(prev => prev.map(u => u.id === child.id ? {...u, points: u.points + chore.points} : u));
-            addNotification('child', `Your parent manually completed "${chore.name}" for you. You earned ${chore.points} points.`);
-        }
+      const child = users.find(u => u.id === childId);
+      if (child) {
+        setUsers(prev => prev.map(u => u.id === child.id ? { ...u, points: u.points + chore.points } : u));
+        addNotification('child', `Your parent manually completed "${chore.name}" for you. You earned ${chore.points} points.`);
+      }
     }
 
     // Streak logic
     if (chore.recurrence === ChoreRecurrence.Daily || chore.recurrence === ChoreRecurrence.Weekly) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        let newStreak = chore.streak || 0;
-        const lastCompleted = chore.lastCompletedDate ? new Date(chore.lastCompletedDate) : null;
-        if (lastCompleted) {
-          lastCompleted.setHours(0, 0, 0, 0);
-        }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-        if (chore.recurrence === ChoreRecurrence.Daily) {
-          if (lastCompleted) {
-            const yesterday = new Date(today);
-            yesterday.setDate(today.getDate() - 1);
-            if (lastCompleted.getTime() === yesterday.getTime()) {
-              newStreak++;
-            } else if (lastCompleted.getTime() < yesterday.getTime()) {
-              newStreak = 1;
-            }
-          } else {
+      let newStreak = chore.streak || 0;
+      const lastCompleted = chore.lastCompletedDate ? new Date(chore.lastCompletedDate) : null;
+      if (lastCompleted) {
+        lastCompleted.setHours(0, 0, 0, 0);
+      }
+
+      if (chore.recurrence === ChoreRecurrence.Daily) {
+        if (lastCompleted) {
+          const yesterday = new Date(today);
+          yesterday.setDate(today.getDate() - 1);
+          if (lastCompleted.getTime() === yesterday.getTime()) {
+            newStreak++;
+          } else if (lastCompleted.getTime() < yesterday.getTime()) {
             newStreak = 1;
           }
-        } else if (chore.recurrence === ChoreRecurrence.Weekly) {
-          if (lastCompleted) {
-            const sevenDaysAgo = new Date(today);
-            sevenDaysAgo.setDate(today.getDate() - 7);
-            if (lastCompleted.getTime() >= sevenDaysAgo.getTime()) {
-              newStreak++;
-            } else {
-              newStreak = 1;
-            }
-          } else {
-            newStreak = 1;
-          }
+        } else {
+          newStreak = 1;
         }
-        updatedChore.streak = newStreak;
-        updatedChore.lastCompletedDate = new Date().toISOString();
+      } else if (chore.recurrence === ChoreRecurrence.Weekly) {
+        if (lastCompleted) {
+          const sevenDaysAgo = new Date(today);
+          sevenDaysAgo.setDate(today.getDate() - 7);
+          if (lastCompleted.getTime() >= sevenDaysAgo.getTime()) {
+            newStreak++;
+          } else {
+            newStreak = 1;
+          }
+        } else {
+          newStreak = 1;
+        }
+      }
+      updatedChore.streak = newStreak;
+      updatedChore.lastCompletedDate = new Date().toISOString();
     }
 
     setChores(prev => prev.map(c => c.id === choreId ? updatedChore : c));
@@ -408,7 +495,7 @@ const App: React.FC = () => {
   const handleRedeemReward = useCallback((rewardId: number) => {
     const reward = rewards.find(r => r.id === rewardId);
     if (reward && currentUser?.role === 'child' && currentUser?.points >= reward.points) {
-      setUsers(prev => prev.map(u => u.id === currentUser?.id ? {...u, points: u.points - reward.points} : u));
+      setUsers(prev => prev.map(u => u.id === currentUser?.id ? { ...u, points: u.points - reward.points } : u));
       alert(`You've redeemed "${reward.name}"!`);
     }
   }, [rewards, currentUser, setUsers]);
@@ -475,19 +562,18 @@ const App: React.FC = () => {
     if (!editingChore) return;
 
     const updatedChore: Chore = {
-        ...editingChore,
-        name: newChoreName,
-        points: parseInt(newChorePoints, 10),
-        description: newChoreDescription,
-        assignedTo: newChoreAssignedTo === 'unassigned' ? undefined : parseInt(newChoreAssignedTo, 10),
-        requiresApproval: newChoreRequiresApproval,
-        recurrence: newChoreRecurrence,
+      ...editingChore,
+      name: newChoreName,
+      points: parseInt(newChorePoints, 10),
+      description: newChoreDescription,
+      assignedTo: newChoreAssignedTo === 'unassigned' ? undefined : parseInt(newChoreAssignedTo, 10),
+      requiresApproval: newChoreRequiresApproval,
+      recurrence: newChoreRecurrence,
     };
 
     setChores(prev => prev.map(c => c.id === editingChore.id ? updatedChore : c));
     closeModal();
   };
-
 
   const handleAddReward = (e: React.FormEvent) => {
     e.preventDefault();
@@ -530,14 +616,14 @@ const App: React.FC = () => {
     if (!request) return;
 
     if (newStatus === PointRequestStatus.Approved) {
-      setUsers(prev => prev.map(u => u.id === request.userId ? { ...u, points: u.points + request.points} : u));
+      setUsers(prev => prev.map(u => u.id === request.userId ? { ...u, points: u.points + request.points } : u));
       addNotification('child', `Your request for "${request.description}" was approved! You earned ${request.points} points.`);
     } else {
       addNotification('child', `Your request for "${request.description}" was denied.`);
     }
     setPointRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: newStatus } : r));
   };
-  
+
   const handleOpenEditUserModal = (userToEdit: User) => {
     setEditingUser(userToEdit);
     setNewUserName(userToEdit.name);
@@ -545,76 +631,75 @@ const App: React.FC = () => {
     setModalContent('editUser');
     setIsModalOpen(true);
   };
-  
+
   const handleAddUser = (e: React.FormEvent) => {
-      e.preventDefault();
-      const newUser: User = {
-          id: Date.now(),
-          name: newUserName,
-          role: newUserRole,
-          avatar: newUserRole === 'child' ? 'bot' : null,
-          points: 0,
-      };
-      setUsers(prev => [...prev, newUser]);
-      closeModal();
+    e.preventDefault();
+    const newUser: User = {
+      id: Date.now(),
+      name: newUserName,
+      role: newUserRole,
+      avatar: newUserRole === 'child' ? 'boy-robot' : null,
+      points: 0,
+    };
+    setUsers(prev => [...prev, newUser]);
+    closeModal();
   };
 
   const handleEditUser = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!editingUser) return;
+    e.preventDefault();
+    if (!editingUser) return;
 
-      setUsers(prev => prev.map(u => {
-          if (u.id === editingUser.id) {
-              const wasChild = editingUser.role === 'child';
-              const isNowParent = newUserRole === 'parent';
-              
-              if (wasChild && isNowParent) {
-                  setChores(chores => chores.map(c => c.assignedTo === u.id ? { ...c, assignedTo: undefined } : c));
-              }
+    setUsers(prev => prev.map(u => {
+      if (u.id === editingUser.id) {
+        const wasChild = editingUser.role === 'child';
+        const isNowParent = newUserRole === 'parent';
 
-              return {
-                  ...u,
-                  name: newUserName,
-                  role: newUserRole,
-                  points: u.role !== newUserRole ? 0 : u.points,
-                  avatar: isNowParent ? null : (u.avatar || 'bot'),
-              };
-          }
-          return u;
-      }));
-      
-      closeModal();
+        if (wasChild && isNowParent) {
+          setChores(chores => chores.map(c => c.assignedTo === u.id ? { ...c, assignedTo: undefined } : c));
+        }
+
+        return {
+          ...u,
+          name: newUserName,
+          role: newUserRole,
+          points: u.role !== newUserRole ? 0 : u.points,
+          avatar: isNowParent ? null : (u.avatar || 'boy-robot'),
+        };
+      }
+      return u;
+    }));
+
+    closeModal();
   };
 
   const handleDeleteUser = (userId: number) => {
-      const userToDelete = users.find(u => u.id === userId);
-      if (!userToDelete) return;
+    const userToDelete = users.find(u => u.id === userId);
+    if (!userToDelete) return;
 
-      if (userId === currentUserId) {
-          alert("You cannot delete the account you are currently using.");
-          return;
+    if (userId === currentUserId) {
+      alert("You cannot delete the account you are currently using.");
+      return;
+    }
+
+    if (userToDelete.role === 'parent' && parentUsers?.length <= 1) {
+      alert("You cannot delete the last parent account.");
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to delete ${userToDelete.name}? This will also remove their assigned chores and cannot be undone.`)) {
+      if (userToDelete.role === 'child') {
+        setChores(prev => prev.map(c => c.assignedTo === userId ? { ...c, assignedTo: undefined } : c));
+        setPointRequests(prev => prev.filter(r => r.userId !== userId));
       }
 
-      if (userToDelete.role === 'parent' && parentUsers?.length <= 1) {
-          alert("You cannot delete the last parent account.");
-          return;
-      }
-
-      if (window.confirm(`Are you sure you want to delete ${userToDelete.name}? This will also remove their assigned chores and cannot be undone.`)) {
-          if (userToDelete.role === 'child') {
-              setChores(prev => prev.map(c => c.assignedTo === userId ? { ...c, assignedTo: undefined } : c));
-              setPointRequests(prev => prev.filter(r => r.userId !== userId));
-          }
-          
-          setUsers(prev => prev.filter(u => u.id !== userId));
-      }
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    }
   };
 
   const resetDailyChores = () => {
     if (window.confirm("Are you sure you want to reset all daily chores?")) {
       setChores(prev => prev.map(c => {
         if (c.recurrence === ChoreRecurrence.Daily) {
-          // If chore was not completed, reset streak to 0.
           const newStreak = c.status === ChoreStatus.Incomplete ? 0 : c.streak;
           return { ...c, status: ChoreStatus.Incomplete, streak: newStreak };
         }
@@ -631,7 +716,7 @@ const App: React.FC = () => {
   };
 
   const handleClearNotifications = () => {
-      setNotifications(prev => prev.filter(n => n.targetRole !== currentUser?.role));
+    setNotifications(prev => prev.filter(n => n.targetRole !== currentUser?.role));
   };
 
   const sortedChores = useMemo(() => {
@@ -640,7 +725,7 @@ const App: React.FC = () => {
       [ChoreStatus.PendingApproval]: 2,
       [ChoreStatus.Completed]: 3,
     };
-     const userChores = currentUser?.role === 'parent'
+    const userChores = currentUser?.role === 'parent'
       ? chores
       : chores.filter(c => c.assignedTo === currentUser?.id || !c.assignedTo);
 
@@ -654,17 +739,30 @@ const App: React.FC = () => {
   const unreadNotificationsCount = useMemo(() => {
     return notifications.filter(n => n.targetRole === currentUser?.role && !n.read).length;
   }, [notifications, currentUser]);
-  
+
   const currentUserNotifications = useMemo(() => {
     return notifications.filter(n => n.targetRole === currentUser?.role);
   }, [notifications, currentUser]);
 
+  // Show family selection or avatar selection on first load
+  if (!currentUser && users.length > 0) {
+    if (users.length === 1) {
+      // Single user - show avatar selection if child
+      const singleUser = users[0];
+      if (singleUser.role === 'child' && !singleUser.avatar) {
+        setShowAvatarSelection(true);
+      } else if (singleUser.role === 'child' && singleUser.avatar) {
+        setShowThemeSelection(true);
+      }
+    }
+  }
+
   if (!currentUser) {
-    return <div>Loading...</div>; // Or a better loading state
+    return <div>Loading...</div>;
   }
 
   return (
-    <div className="min-h-screen flex flex-col font-sans bg-[#F3F4F6]">
+    <div className="min-h-screen flex flex-col font-sans bg-[#F3F4F6] dark:bg-slate-900">
       <MissionControlHeader
         points={currentUser?.points || 0}
         currentUser={currentUser}
@@ -672,12 +770,6 @@ const App: React.FC = () => {
         onUserChange={handleUserChange}
         onEditProfile={() => setIsProfileModalOpen(true)}
         onLogout={handleLogout}
-        onResetData={() => {
-          if (window.confirm('Are you sure you want to wipe all data? This cannot be undone!')) {
-            resetStorage();
-            window.location.reload();
-          }
-        }}
         unreadNotificationsCount={unreadNotificationsCount}
         onToggleNotifications={handleToggleNotifications}
         isNotificationsOpen={isNotificationsOpen}
@@ -738,37 +830,37 @@ const App: React.FC = () => {
           {activeView === View.Users && currentUser?.role === 'parent' && (
             <div>
               <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl font-bold">Manage Family</h2>
-                  <button onClick={() => openModal('addUser')} className="bg-sky-500 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-sky-600 flex items-center justify-center space-x-2">
-                      <PlusIcon className="w-5 h-5" />
-                      <span>Add Member</span>
-                  </button>
+                <h2 className="text-2xl font-bold">Manage Family</h2>
+                <button onClick={() => openModal('addUser')} className="bg-sky-500 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-sky-600 flex items-center justify-center space-x-2">
+                  <PlusIcon className="w-5 h-5" />
+                  <span>Add Member</span>
+                </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {users.map(user => (
-                      <div key={user.id} className="bg-white p-4 rounded-xl shadow-md flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                              <AvatarDisplay avatar={user.avatar} sizeClass="w-12 h-12" />
-                              <div>
-                                  <p className="font-bold text-lg">{user.name}</p>
-                                  <p className="text-sm text-slate-500 capitalize">{user.role}</p>
-                              </div>
-                          </div>
-                          <div className="flex space-x-2">
-                              <button onClick={() => handleOpenEditUserModal(user)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-100 rounded-full transition-colors" aria-label={`Edit ${user.name}`}>
-                                  <PencilIcon className="w-5 h-5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteUser(user.id)}
-                                disabled={user.id === currentUserId || (user.role === 'parent' && parentUsers.length <= 1)}
-                                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                aria-label={`Delete ${user.name}`}
-                              >
-                                  <TrashIcon className="w-5 h-5" />
-                              </button>
-                          </div>
+                {users.map(user => (
+                  <div key={user.id} className="bg-white p-4 rounded-xl shadow-md flex items-center justify-between dark:bg-slate-800">
+                    <div className="flex items-center space-x-4">
+                      <AvatarDisplay avatar={user.avatar} sizeClass="w-12 h-12" />
+                      <div>
+                        <p className="font-bold text-lg">{user.name}</p>
+                        <p className="text-sm text-slate-500 capitalize dark:text-slate-400">{user.role}</p>
                       </div>
-                  ))}
+                    </div>
+                    <div className="flex space-x-2">
+                      <button onClick={() => handleOpenEditUserModal(user)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-100 rounded-full transition-colors dark:text-slate-400 dark:hover:bg-blue-900/30" aria-label={`Edit ${user.name}`}>
+                        <PencilIcon className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        disabled={user.id === currentUserId || (user.role === 'parent' && parentUsers.length <= 1)}
+                        className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:text-slate-400 dark:hover:bg-red-900/30"
+                        aria-label={`Delete ${user.name}`}
+                      >
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -791,7 +883,7 @@ const App: React.FC = () => {
       )}
 
       {currentUser?.role === 'parent' && (
-        <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-slate-200 p-2 shadow-t-lg">
+        <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-slate-200 p-2 shadow-t-lg dark:bg-slate-800/80 dark:border-slate-700">
           <div className="container mx-auto flex justify-center items-center space-x-2">
             <button onClick={() => openModal('addChore')} className="flex-1 text-sm bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-blue-600 flex items-center justify-center space-x-2"><PlusIcon className="w-5 h-5" /><span>Add Chore</span></button>
             <button onClick={() => openModal('addReward')} className="flex-1 text-sm bg-green-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-green-600 flex items-center justify-center space-x-2"><PlusIcon className="w-5 h-5" /><span>Add Reward</span></button>
@@ -799,7 +891,7 @@ const App: React.FC = () => {
           </div>
         </footer>
       )}
-      
+
       {isProfileModalOpen && currentUser?.role === 'child' && (
         <ProfileModal
           currentAvatar={currentUser?.avatar}
@@ -807,21 +899,21 @@ const App: React.FC = () => {
           onClose={() => setIsProfileModalOpen(false)}
         />
       )}
-      
+
       <Modal isOpen={isModalOpen} onClose={closeModal}>
         {modalContent === 'addChore' && (
           <form onSubmit={handleAddChore}>
-            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2 dark:text-slate-100">
               <RocketIcon className="w-6 h-6 text-[#FBBF24]" />
               Launch New Mission
             </h2>
             <div className="space-y-4">
-              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Mission name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Mission details (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" rows={3}></textarea>
-              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Fuel points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required min="1" />
-               <div className="flex items-center justify-between">
-                <label htmlFor="assignTo" className="text-slate-600 font-medium">Assign To:</label>
-                <select id="assignTo" value={newChoreAssignedTo} onChange={e => setNewChoreAssignedTo(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
+              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Mission name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required />
+              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Mission details (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" rows={3}></textarea>
+              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Fuel points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required min="1" />
+              <div className="flex items-center justify-between">
+                <label htmlFor="assignTo" className="text-slate-600 font-medium dark:text-slate-300">Assign To:</label>
+                <select id="assignTo" value={newChoreAssignedTo} onChange={e => setNewChoreAssignedTo(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                   <option value="unassigned">Anyone</option>
                   {childUsers.map(child => (
                     <option key={child.id} value={child.id}>{child.name}</option>
@@ -829,8 +921,8 @@ const App: React.FC = () => {
                 </select>
               </div>
               <div className="flex items-center justify-between">
-                <label htmlFor="recurrence" className="text-slate-600 font-medium">Frequency:</label>
-                <select id="recurrence" value={newChoreRecurrence} onChange={e => setNewChoreRecurrence(e.target.value as ChoreRecurrence)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
+                <label htmlFor="recurrence" className="text-slate-600 font-medium dark:text-slate-300">Frequency:</label>
+                <select id="recurrence" value={newChoreRecurrence} onChange={e => setNewChoreRecurrence(e.target.value as ChoreRecurrence)} className="p-2 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                   <option value={ChoreRecurrence.None}>One-time</option>
                   <option value={ChoreRecurrence.Daily}>Daily</option>
                   <option value={ChoreRecurrence.Weekly}>Weekly</option>
@@ -838,7 +930,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex items-center">
                 <input type="checkbox" id="requiresApproval" checked={newChoreRequiresApproval} onChange={e => setNewChoreRequiresApproval(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#7C3AED] focus:ring-[#7C3AED]" />
-                <label htmlFor="requiresApproval" className="ml-3 block text-sm font-medium text-slate-700">Requires parent approval</label>
+                <label htmlFor="requiresApproval" className="ml-3 block text-sm font-medium text-slate-700 dark:text-slate-300">Requires parent approval</label>
               </div>
               <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Launch Mission</button>
             </div>
@@ -846,17 +938,17 @@ const App: React.FC = () => {
         )}
         {modalContent === 'editChore' && editingChore && (
           <form onSubmit={handleEditChore}>
-            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2 dark:text-slate-100">
               <RocketIcon className="w-6 h-6 text-[#FBBF24]" />
               Edit Mission
             </h2>
             <div className="space-y-4">
-              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Mission name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Mission details (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" rows={3}></textarea>
-              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Fuel points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required min="1" />
-               <div className="flex items-center justify-between">
-                <label htmlFor="assignTo" className="text-slate-600 font-medium">Assign To:</label>
-                <select id="assignTo" value={newChoreAssignedTo} onChange={e => setNewChoreAssignedTo(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
+              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Mission name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required />
+              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Mission details (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" rows={3}></textarea>
+              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Fuel points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required min="1" />
+              <div className="flex items-center justify-between">
+                <label htmlFor="assignTo" className="text-slate-600 font-medium dark:text-slate-300">Assign To:</label>
+                <select id="assignTo" value={newChoreAssignedTo} onChange={e => setNewChoreAssignedTo(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                   <option value="unassigned">Anyone</option>
                   {childUsers.map(child => (
                     <option key={child.id} value={child.id}>{child.name}</option>
@@ -864,8 +956,8 @@ const App: React.FC = () => {
                 </select>
               </div>
               <div className="flex items-center justify-between">
-                <label htmlFor="recurrence" className="text-slate-600 font-medium">Frequency:</label>
-                <select id="recurrence" value={newChoreRecurrence} onChange={e => setNewChoreRecurrence(e.target.value as ChoreRecurrence)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
+                <label htmlFor="recurrence" className="text-slate-600 font-medium dark:text-slate-300">Frequency:</label>
+                <select id="recurrence" value={newChoreRecurrence} onChange={e => setNewChoreRecurrence(e.target.value as ChoreRecurrence)} className="p-2 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                   <option value={ChoreRecurrence.None}>One-time</option>
                   <option value={ChoreRecurrence.Daily}>Daily</option>
                   <option value={ChoreRecurrence.Weekly}>Weekly</option>
@@ -873,7 +965,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex items-center">
                 <input type="checkbox" id="requiresApproval" checked={newChoreRequiresApproval} onChange={e => setNewChoreRequiresApproval(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#7C3AED] focus:ring-[#7C3AED]" />
-                <label htmlFor="requiresApproval" className="ml-3 block text-sm font-medium text-slate-700">Requires parent approval</label>
+                <label htmlFor="requiresApproval" className="ml-3 block text-sm font-medium text-slate-700 dark:text-slate-300">Requires parent approval</label>
               </div>
               <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Save Changes</button>
             </div>
@@ -881,86 +973,148 @@ const App: React.FC = () => {
         )}
         {modalContent === 'addReward' && (
           <form onSubmit={handleAddReward}>
-            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2 dark:text-slate-100">
               <GiftIcon className="w-6 h-6 text-[#EC4899]" />
               Add New Reward
             </h2>
-            <input type="text" value={newRewardName} onChange={e => setNewRewardName(e.target.value)} placeholder="Reward name" className="w-full p-2 border rounded mb-2 bg-slate-50 text-slate-800" required />
-            <input type="number" value={newRewardPoints} onChange={e => setNewRewardPoints(e.target.value)} placeholder="Fuel cost" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required min="1" />
+            <input type="text" value={newRewardName} onChange={e => setNewRewardName(e.target.value)} placeholder="Reward name" className="w-full p-2 border rounded mb-2 bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required />
+            <input type="number" value={newRewardPoints} onChange={e => setNewRewardPoints(e.target.value)} placeholder="Fuel cost" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required min="1" />
             <button type="submit" className="w-full bg-[#10B981] text-white p-2 rounded font-bold hover:bg-[#059669] uppercase tracking-wide">Add Reward</button>
           </form>
         )}
         {modalContent === 'addPoints' && (
           <form onSubmit={handleAddPoints}>
-            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2 dark:text-slate-100">
               <CogIcon className="w-6 h-6 text-[#F97316]" />
               Assign Fuel
             </h2>
-            <p className="mb-4 text-slate-600">Give extra fuel for a job well done or deduct if needed (use a negative number).</p>
+            <p className="mb-4 text-slate-600 dark:text-slate-400">Give extra fuel for a job well done or deduct if needed (use a negative number).</p>
             <div className="flex items-center justify-between mb-4">
-              <label htmlFor="assignTo" className="text-slate-600 font-medium">For:</label>
-                <select id="assignTo" value={manualPointsUser} onChange={e => setManualPointsUser(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                  {childUsers.map(child => (
-                    <option key={child.id} value={child.id}>{child.name}</option>
-                  ))}
-                </select>
+              <label htmlFor="assignTo" className="text-slate-600 font-medium dark:text-slate-300">For:</label>
+              <select id="assignTo" value={manualPointsUser} onChange={e => setManualPointsUser(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                {childUsers.map(child => (
+                  <option key={child.id} value={child.id}>{child.name}</option>
+                ))}
+              </select>
             </div>
-            <input type="number" value={manualPoints} onChange={e => setManualPoints(e.target.value)} placeholder="Enter fuel points (e.g., 50 or -10)" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required />
+            <input type="number" value={manualPoints} onChange={e => setManualPoints(e.target.value)} placeholder="Enter fuel points (e.g., 50 or -10)" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required />
             <button type="submit" className="w-full bg-[#F97316] text-white p-2 rounded font-bold hover:bg-[#EA580C] uppercase tracking-wide">Assign Fuel</button>
           </form>
         )}
         {modalContent === 'requestPoints' && (
           <form onSubmit={handleRequestPoints}>
-            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2 dark:text-slate-100">
               <RocketIcon className="w-6 h-6 text-[#FBBF24]" />
               Request Fuel
             </h2>
-            <p className="mb-4 text-slate-600">Did something extra? Describe what you did to earn more fuel!</p>
-            <textarea value={requestDescription} onChange={e => setRequestDescription(e.target.value)} placeholder="Description (e.g., cleaned the garage)" className="w-full p-2 border rounded mb-2 bg-slate-50 text-slate-800" required />
-            <input type="number" value={requestPoints} onChange={e => setRequestPoints(e.target.value)} placeholder="Fuel requested" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required min="1" />
+            <p className="mb-4 text-slate-600 dark:text-slate-400">Did something extra? Describe what you did to earn more fuel!</p>
+            <textarea value={requestDescription} onChange={e => setRequestDescription(e.target.value)} placeholder="Description (e.g., cleaned the garage)" className="w-full p-2 border rounded mb-2 bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required />
+            <input type="number" value={requestPoints} onChange={e => setRequestPoints(e.target.value)} placeholder="Fuel requested" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required min="1" />
             <button type="submit" className="w-full bg-[#EC4899] text-white p-2 rounded font-bold hover:bg-[#BE185D] uppercase tracking-wide">Send Request</button>
           </form>
         )}
         {modalContent === 'addUser' && (
           <form onSubmit={handleAddUser}>
-            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2 dark:text-slate-100">
               <UsersIcon className="w-6 h-6 text-[#7C3AED]" />
               Add Family Member
             </h2>
             <div className="space-y-4">
-                <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-                <div className="flex items-center justify-between">
-                    <label htmlFor="userRole" className="text-slate-600 font-medium">Role:</label>
-                    <select id="userRole" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                        <option value="child">Child</option>
-                        <option value="parent">Parent</option>
-                    </select>
-                </div>
-                <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Add Member</button>
+              <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required />
+              <div className="flex items-center justify-between">
+                <label htmlFor="userRole" className="text-slate-600 font-medium dark:text-slate-300">Role:</label>
+                <select id="userRole" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)} className="p-2 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                  <option value="child">Child</option>
+                  <option value="parent">Parent</option>
+                </select>
+              </div>
+              <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Add Member</button>
             </div>
           </form>
         )}
         {modalContent === 'editUser' && editingUser && (
           <form onSubmit={handleEditUser}>
-            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2">
+            <h2 className="text-2xl font-bold mb-4 text-[#1E3A5F] uppercase tracking-wide flex items-center gap-2 dark:text-slate-100">
               <PencilIcon className="w-6 h-6 text-[#EC4899]" />
               Edit {editingUser.name}
             </h2>
             <div className="space-y-4">
-                <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-                <div className="flex items-center justify-between">
-                    <label htmlFor="userRole" className="text-slate-600 font-medium">Role:</label>
-                    <select id="userRole" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                        <option value="child">Child</option>
-                        <option value="parent">Parent</option>
-                    </select>
-                </div>
-                <p className="text-xs text-slate-500">Changing a user's role will reset their fuel.</p>
-                <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Save Changes</button>
+              <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100" required />
+              <div className="flex items-center justify-between">
+                <label htmlFor="userRole" className="text-slate-600 font-medium dark:text-slate-300">Role:</label>
+                <select id="userRole" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)} className="p-2 border rounded-md bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                  <option value="child">Child</option>
+                  <option value="parent">Parent</option>
+                </select>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Changing a user's role will reset their fuel.</p>
+              <button type="submit" className="w-full bg-[#7C3AED] text-white p-3 rounded-md font-bold hover:bg-[#6D28D9] transition-colors uppercase tracking-wide">Save Changes</button>
             </div>
           </form>
         )}
       </Modal>
+
+      {/* Avatar Selection Modal */}
+      {showAvatarSelection && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold mb-4 text-slate-800 dark:text-slate-100">Pick Your Avatar!</h2>
+            <AvatarSelection
+              selectedAvatarId={selectedAvatar}
+              onSelectAvatar={setSelectedAvatar}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Theme Selection Modal */}
+      {showThemeSelection && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold mb-4 text-slate-800 dark:text-slate-100">Choose Your Theme</h2>
+            <div className="space-y-3">
+              <button
+                onClick={() => { setTheme('light'); setShowThemeSelection(false); }}
+                className="w-full p-4 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center gap-3"
+              >
+                <SunIcon className="w-8 h-8 text-yellow-500" />
+                <div className="text-left">
+                  <p className="font-semibold text-slate-800 dark:text-slate-100">☀️ Light Mode</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Bright and clean interface</p>
+                </div>
+              </button>
+              <button
+                onClick={() => { setTheme('dark'); setShowThemeSelection(false); }}
+                className="w-full p-4 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center gap-3"
+              >
+                <MoonIcon className="w-8 h-8 text-indigo-400" />
+                <div className="text-left">
+                  <p className="font-semibold text-slate-800 dark:text-slate-100">🌙 Dark Mode</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Easy on the eyes at night</p>
+                </div>
+              </button>
+              <button
+                onClick={() => { setTheme('system'); setShowThemeSelection(false); }}
+                className="w-full p-4 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center gap-3"
+              >
+                <MonitorIcon className="w-8 h-8 text-slate-600 dark:text-slate-400" />
+                <div className="text-left">
+                  <p className="font-semibold text-slate-800 dark:text-slate-100">💙 System (Auto)</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Follows your device's theme</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Install Prompt */}
+      <InstallPrompt onInstall={() => console.log('PWA installed')} />
+
+      {/* Theme Toggle */}
+      <div className="fixed top-4 right-4 z-40">
+        <ThemeToggle />
+      </div>
     </div>
   );
 };

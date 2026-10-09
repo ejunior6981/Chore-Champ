@@ -1,0 +1,960 @@
+openapi: 3.0.3
+info:
+  title: Chore Champ API
+  description: API endpoints for Chore Champ multi-tenant chore tracking application
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Default server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - familyId
+        - email
+        - name
+        - role
+        - points
+      properties:
+        id:
+          type: string
+          format: uuid
+        familyId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [parent, child]
+        avatarId:
+          type: string
+        points:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Chore:
+      type: object
+      required:
+        - id
+        - name
+        - points
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        points:
+          type: integer
+        status:
+          type: string
+          enum: [INCOMPLETE, PENDING_APPROVAL, COMPLETED]
+        requiresApproval:
+          type: boolean
+        recurrence:
+          type: string
+          enum: [NONE, DAILY, WEEKLY]
+        assignedTo:
+          type: string
+          format: uuid
+        streak:
+          type: integer
+        lastCompletedDate:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Reward:
+      type: object
+      required:
+        - id
+        - name
+        - points
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        points:
+          type: integer
+        category:
+          type: string
+          enum: [entertainment, food, privilege, experience, custom]
+        quantityLimit:
+          type: integer
+        cooldownDays:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PointRequest:
+      type: object
+      required:
+        - id
+        - userId
+        - description
+        - points
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        description:
+          type: string
+        points:
+          type: integer
+        status:
+          type: string
+          enum: [PENDING, APPROVED, DENIED]
+        approvedBy:
+          type: string
+          format: uuid
+        approvedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      required:
+        - id
+        - type
+        - title
+        - body
+        - read
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [CHORE_COMPLETION, CHORE_APPROVED, CHORE_DENIED, POINT_REQUEST_APPROVED, POINT_REQUEST_DENIED, NEW_CHORE_ASSIGNED, REWARD_REDEEMED, DAILY_RESET]
+        title:
+          type: string
+        body:
+          type: string
+        data:
+          $ref: '#/components/schemas/NotificationData'
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+
+    NotificationData:
+      type: object
+      properties:
+        choreId:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        rewardId:
+          type: string
+          format: uuid
+        choreName:
+          type: string
+        points:
+          type: integer
+        action:
+          type: string
+          enum: [view, complete, redeem]
+
+    Avatar:
+      type: object
+      required:
+        - id
+        - name
+        - category
+        - emoji
+        - description
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [boy, girl, neutral]
+        emoji:
+          type: string
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+paths:
+  /auth/login:
+    post:
+      summary: Login with email and password
+      description: Authenticate user with email and password. Returns JWT token.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    format: jwt
+                  familyId:
+                    type: string
+                    format: uuid
+                  role:
+                    type: string
+                    enum: [parent, child]
+                  children:
+                    type: array
+                    items:
+                      type: string
+                    description: Array of child IDs if parent
+        '401':
+          description: Invalid credentials
+        '429':
+          description: Too many requests (rate limited)
+
+  /auth/register:
+    post:
+      summary: Register new user
+      description: Create new user account with email and password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+                name:
+                  type: string
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          description: Invalid input
+        '409':
+          description: User already exists
+
+  /auth/password-reset:
+    post:
+      summary: Request password reset
+      description: Send password reset email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Password reset email sent
+        '404':
+          description: User not found
+
+  /users:
+    get:
+      summary: List all users in family
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+    post:
+      summary: Create new user (parent only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - role
+              properties:
+                name:
+                  type: string
+                role:
+                  type: string
+                  enum: [parent, child]
+                avatarId:
+                  type: string
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /users/{id}:
+    get:
+      summary: Get user by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /users/{id}/points:
+    patch:
+      summary: Update user points
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - points
+              properties:
+                points:
+                  type: integer
+      responses:
+        '200':
+          description: Points updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /chores:
+    get:
+      summary: List chores
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [INCOMPLETE, PENDING_APPROVAL, COMPLETED]
+        - in: query
+          name: assignedTo
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of chores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Chore'
+    post:
+      summary: Create new chore
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - points
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                points:
+                  type: integer
+                requiresApproval:
+                  type: boolean
+                recurrence:
+                  type: string
+                  enum: [NONE, DAILY, WEEKLY]
+                assignedTo:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Chore created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chore'
+
+  /chores/{id}:
+    get:
+      summary: Get chore by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Chore details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chore'
+    put:
+      summary: Update chore
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                points:
+                  type: integer
+                assignedTo:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Chore updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chore'
+    delete:
+      summary: Delete chore
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Chore deleted
+
+  /chores/{id}/complete:
+    post:
+      summary: Mark chore as completed
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Chore completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chore'
+
+  /chores/{id}/approve:
+    post:
+      summary: Approve pending chore
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Chore approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chore'
+
+  /chores/{id}/deny:
+    post:
+      summary: Deny pending chore
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Chore denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chore'
+
+  /rewards:
+    get:
+      summary: List all rewards
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of rewards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reward'
+    post:
+      summary: Create new reward
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - points
+                - description
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                points:
+                  type: integer
+                category:
+                  type: string
+                  enum: [entertainment, food, privilege, experience, custom]
+      responses:
+        '201':
+          description: Reward created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reward'
+
+  /rewards/{id}:
+    get:
+      summary: Get reward by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Reward details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reward'
+    put:
+      summary: Update reward
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                points:
+                  type: integer
+      responses:
+        '200':
+          description: Reward updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reward'
+
+  /rewards/{id}/redeem:
+    post:
+      summary: Redeem reward
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Reward redeemed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reward'
+
+  /requests:
+    get:
+      summary: List point requests
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, DENIED]
+      responses:
+        '200':
+          description: List of requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PointRequest'
+    post:
+      summary: Create point request
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - description
+                - points
+              properties:
+                description:
+                  type: string
+                points:
+                  type: integer
+      responses:
+        '201':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointRequest'
+
+  /requests/{id}:
+    get:
+      summary: Get request by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointRequest'
+
+  /requests/{id}/approve:
+    post:
+      summary: Approve point request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Request approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointRequest'
+
+  /requests/{id}/deny:
+    post:
+      summary: Deny point request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Request denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointRequest'
+
+  /notifications:
+    get:
+      summary: List notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: userId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: read
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+
+  /avatars:
+    get:
+      summary: List all avatars
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of avatars
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Avatar'
+
+  /avatars/{id}:
+    get:
+      summary: Get avatar by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Avatar details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Avatar'
+
+tags:
+  - name: Authentication
+    description: User authentication and registration
+  - name: Users
+    description: User management
+  - name: Chores
+    description: Chore tracking and management
+  - name: Rewards
+    description: Reward management and redemption
+  - name: Requests
+    description: Point request handling
+  - name: Notifications
+    description: Notification management
+  - name: Avatars
+    description: Avatar management
