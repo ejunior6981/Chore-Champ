@@ -1,353 +1,158 @@
-/**
- * IndexedDB wrapper for offline-first data storage
- * Replaces localStorage with persistent, queryable storage
- */
+import type { User, Chore, Reward, PointRequest, Notification } from '../types';
 
-const DB_NAME = 'ChoreChampDB';
+const DB_NAME = 'chore-champ';
 const DB_VERSION = 1;
 
-interface DB {
-  db: IDBDatabase | null;
-  open(): Promise<IDBDatabase>;
-  close(): void;
-}
-
-interface ChoreChampDB extends DB {
-  store: IDBObjectStore;
-}
-
-export interface IndexedDBConfig {
-  name: string;
-  version: number;
-  stores: {
-    [key: string]: {
-      keyPath?: string;
-      autoIncrement?: boolean;
-    };
-  };
-}
-
-/**
- * Initialize IndexedDB database
- */
-export async function openDB(config: IndexedDBConfig): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(config.name, config.version);
-
-    request.onerror = (event) => {
-      console.error('IndexedDB open error:', event);
-      reject(new Error('Failed to open IndexedDB'));
-    };
-
-    request.onsuccess = (event) => {
-      const db = (event.target as any).result;
-      
-      // Create stores if they don't exist
-      if (!db.objectStoreNames.contains('users')) {
-        const userStore = db.createObjectStore('users', { keyPath: 'id' });
-        userStore.createIndex('familyId', 'familyId', { unique: false });
-        userStore.createIndex('email', 'email', { unique: true });
-      }
-
-      if (!db.objectStoreNames.contains('chores')) {
-        const choreStore = db.createObjectStore('chores', { keyPath: 'id' });
-        choreStore.createIndex('familyId', 'familyId', { unique: false });
-        choreStore.createIndex('assignedTo', 'assignedTo', { unique: false });
-        choreStore.createIndex('status', 'status', { unique: false });
-      }
-
-      if (!db.objectStoreNames.contains('rewards')) {
-        const rewardStore = db.createObjectStore('rewards', { keyPath: 'id' });
-        rewardStore.createIndex('familyId', 'familyId', { unique: false });
-      }
-
-      if (!db.objectStoreNames.contains('pointRequests')) {
-        const requestStore = db.createObjectStore('pointRequests', { keyPath: 'id' });
-        requestStore.createIndex('familyId', 'familyId', { unique: false });
-        requestStore.createIndex('userId', 'userId', { unique: false });
-        requestStore.createIndex('status', 'status', { unique: false });
-      }
-
-      if (!db.objectStoreNames.contains('notifications')) {
-        const notificationStore = db.createObjectStore('notifications', { keyPath: 'id' });
-        notificationStore.createIndex('familyId', 'familyId', { unique: false });
-        notificationStore.createIndex('userId', 'userId', { unique: false });
-        notificationStore.createIndex('read', 'read', { unique: false });
-      }
-
-      if (!db.objectStoreNames.contains('avatars')) {
-        const avatarStore = db.createObjectStore('avatars', { keyPath: 'id' });
-      }
-
-      if (!db.objectStoreNames.contains('settings')) {
-        const settingsStore = db.createObjectStore('settings', { keyPath: 'userId' });
-      }
-
-      resolve(db);
-    };
-
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as any).result;
-      console.log('IndexedDB database upgraded to version', config.version);
-    };
-  });
-}
-
-/**
- * Generic IndexedDB store operations
- */
-export const Store = {
-  /**
-   * Get item by key
-   */
-  get: async <T>(db: IDBDatabase, storeName: string, key: any): Promise<T | null> => {
-    const store = db.transaction(storeName, 'readonly').objectStore(storeName);
-    const request = store.get(key);
-    
-    return new Promise((resolve, reject) => {
-      request.onerror = (event) => reject(event);
-      request.onsuccess = () => resolve(request.result as T | null);
-    });
-  },
-
-  /**
-   * Put item
-   */
-  put: async <T extends { id?: string }>(db: IDBDatabase, storeName: string, item: T): Promise<void> => {
-    const store = db.transaction(storeName, 'readwrite').objectStore(storeName);
-    const request = store.put(item);
-    
-    return new Promise((resolve, reject) => {
-      request.onerror = (event) => reject(event);
-      request.onsuccess = () => resolve();
-    });
-  },
-
-  /**
-   * Delete item by key
-   */
-  delete: async (db: IDBDatabase, storeName: string, key: any): Promise<void> => {
-    const store = db.transaction(storeName, 'readwrite').objectStore(storeName);
-    const request = store.delete(key);
-    
-    return new Promise((resolve, reject) => {
-      request.onerror = (event) => reject(event);
-      request.onsuccess = () => resolve();
-    });
-  },
-
-  /**
-   * Get all items
-   */
-  getAll: async <T>(db: IDBDatabase, storeName: string): Promise<T[]> => {
-    const store = db.transaction(storeName, 'readonly').objectStore(storeName);
-    const request = store.getAll();
-    
-    return new Promise((resolve, reject) => {
-      request.onerror = (event) => reject(event);
-      request.onsuccess = () => resolve(request.result as T[]);
-    });
-  },
-
-  /**
-   * Get all items with index
-   */
-  getAllByIndex: async <T>(
-    db: IDBDatabase,
-    storeName: string,
-    indexName: string,
-    value: any
-  ): Promise<T[]> => {
-    const store = db.transaction(storeName, 'readonly').objectStore(storeName);
-    const index = store.index(indexName);
-    const request = index.getAll(value);
-    
-    return new Promise((resolve, reject) => {
-      request.onerror = (event) => reject(event);
-      request.onsuccess = () => resolve(request.result as T[]);
-    });
-  },
-
-  /**
-   * Count items
-   */
-  count: async (db: IDBDatabase, storeName: string): Promise<number> => {
-    const store = db.transaction(storeName, 'readonly').objectStore(storeName);
-    const request = store.count();
-    
-    return new Promise((resolve, reject) => {
-      request.onerror = (event) => reject(event);
-      request.onsuccess = () => resolve(request.result);
-    });
-  },
-};
-
-/**
- * IndexedDB wrapper for localStorage replacement
- */
-export class IndexedDBWrapper {
+export class IndexedDB {
   private db: IDBDatabase | null = null;
 
   async initialize(): Promise<void> {
-    this.db = await openDB({
-      name: DB_NAME,
-      version: DB_VERSION,
-      stores: {},
+    if (!this.db) {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.addEventListener('error', (event) => {
+          reject(event.error);
+        });
+
+        request.addEventListener('upgradeneeded', (event) => {
+          const db = (event.target as IDBOpenDBRequest).result;
+
+          // Create users store
+          if (!db.objectStoreNames.contains('users')) {
+            const userStore = db.createObjectStore('users', { keyPath: 'id' });
+            userStore.createIndex('role', 'role', { unique: false });
+            userStore.createIndex('email', 'email', { unique: true });
+          }
+
+          // Create chores store
+          if (!db.objectStoreNames.contains('chores')) {
+            const choreStore = db.createObjectStore('chores', { keyPath: 'id' });
+            choreStore.createIndex('status', 'status', { unique: false });
+          }
+
+          // Create rewards store
+          if (!db.objectStoreNames.contains('rewards')) {
+            const rewardStore = db.createObjectStore('rewards', { keyPath: 'id' });
+            rewardStore.createIndex('points', 'points', { unique: false });
+          }
+
+          // Create pointRequests store
+          if (!db.objectStoreNames.contains('pointRequests')) {
+            const requestStore = db.createObjectStore('pointRequests', { keyPath: 'id' });
+            requestStore.createIndex('status', 'status', { unique: false });
+          }
+
+          // Create notifications store
+          if (!db.objectStoreNames.contains('notifications')) {
+            const notificationStore = db.createObjectStore('notifications', { keyPath: 'id' });
+            notificationStore.createIndex('read', 'read', { unique: false });
+            notificationStore.createIndex('timestamp', 'timestamp', { unique: false });
+          }
+        });
+
+        request.addEventListener('completed', (event) => {
+          this.db = (event.target as IDBOpenDBRequest).result;
+          resolve();
+        });
+      });
+    }
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    if (!this.db) await this.initialize();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['users'], 'readonly');
+      const store = transaction.objectStore('users');
+      const request = store.getAll();
+      request.addEventListener('error', (event) => reject(event.error));
+      request.addEventListener('complete', (event) => resolve(event.target.result));
     });
-    console.log('IndexedDB initialized');
   }
 
-  async getUsers(): Promise<any[]> {
+  async getUserById(id: string): Promise<User | null> {
     if (!this.db) await this.initialize();
-    return Store.getAll(this.db, 'users');
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['users'], 'readonly');
+      const store = transaction.objectStore('users');
+      const request = store.get(id);
+      request.addEventListener('error', (event) => reject(event.error));
+      request.addEventListener('complete', (event) => resolve(event.target.result));
+    });
   }
 
-  async getUser(id: string): Promise<any | null> {
+  async putUser(user: User): Promise<void> {
     if (!this.db) await this.initialize();
-    return Store.get(this.db, 'users', id);
-  }
-
-  async saveUser(user: any): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.put(this.db, 'users', user);
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['users'], 'readwrite');
+      const store = transaction.objectStore('users');
+      const request = store.put(user);
+      request.addEventListener('error', (event) => reject(event.error));
+      request.addEventListener('complete', (event) => resolve());
+    });
   }
 
   async deleteUsers(): Promise<void> {
     if (!this.db) await this.initialize();
-    return Store.delete(this.db, 'users');
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['users'], 'readwrite');
+      const store = transaction.objectStore('users');
+      const request = store.clear();
+      request.addEventListener('error', (event) => reject(event.error));
+      request.addEventListener('complete', (event) => resolve());
+    });
   }
 
-  async getChores(): Promise<any[]> {
+  async getAllChores(): Promise<Chore[]> {
     if (!this.db) await this.initialize();
-    return Store.getAll(this.db, 'chores');
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['chores'], 'readonly');
+      const store = transaction.objectStore('chores');
+      const request = store.getAll();
+      request.addEventListener('error', (event) => reject(event.error));
+      request.addEventListener('complete', (event) => resolve(event.target.result));
+    });
   }
 
-  async getChore(id: string): Promise<any | null> {
+  async getAllRewards(): Promise<Reward[]> {
     if (!this.db) await this.initialize();
-    return Store.get(this.db, 'chores', id);
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['rewards'], 'readonly');
+      const store = transaction.objectStore('rewards');
+      const request = store.getAll();
+      request.addEventListener('error', (event) => reject(event.error));
+      request.addEventListener('complete', (event) => resolve(event.target.result));
+    });
   }
 
-  async saveChore(chore: any): Promise<void> {
+  async getAllPointRequests(): Promise<PointRequest[]> {
     if (!this.db) await this.initialize();
-    return Store.put(this.db, 'chores', chore);
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['pointRequests'], 'readonly');
+      const store = transaction.objectStore('pointRequests');
+      const request = store.getAll();
+      request.addEventListener('error', (event) => reject(event.error));
+      request.addEventListener('complete', (event) => resolve(event.target.result));
+    });
   }
 
-  async deleteChore(id: string): Promise<void> {
+  async getAllNotifications(): Promise<Notification[]> {
     if (!this.db) await this.initialize();
-    return Store.delete(this.db, 'chores', id);
-  }
-
-  async getRewards(): Promise<any[]> {
-    if (!this.db) await this.initialize();
-    return Store.getAll(this.db, 'rewards');
-  }
-
-  async getReward(id: string): Promise<any | null> {
-    if (!this.db) await this.initialize();
-    return Store.get(this.db, 'rewards', id);
-  }
-
-  async saveReward(reward: any): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.put(this.db, 'rewards', reward);
-  }
-
-  async deleteReward(id: string): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.delete(this.db, 'rewards', id);
-  }
-
-  async getPointRequests(): Promise<any[]> {
-    if (!this.db) await this.initialize();
-    return Store.getAll(this.db, 'pointRequests');
-  }
-
-  async getPointRequest(id: string): Promise<any | null> {
-    if (!this.db) await this.initialize();
-    return Store.get(this.db, 'pointRequests', id);
-  }
-
-  async savePointRequest(request: any): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.put(this.db, 'pointRequests', request);
-  }
-
-  async deletePointRequest(id: string): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.delete(this.db, 'pointRequests', id);
-  }
-
-  async getNotifications(): Promise<any[]> {
-    if (!this.db) await this.initialize();
-    return Store.getAll(this.db, 'notifications');
-  }
-
-  async getNotification(id: string): Promise<any | null> {
-    if (!this.db) await this.initialize();
-    return Store.get(this.db, 'notifications', id);
-  }
-
-  async saveNotification(notification: any): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.put(this.db, 'notifications', notification);
-  }
-
-  async deleteNotification(id: string): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.delete(this.db, 'notifications', id);
-  }
-
-  async getAvatars(): Promise<any[]> {
-    if (!this.db) await this.initialize();
-    return Store.getAll(this.db, 'avatars');
-  }
-
-  async getAvatar(id: string): Promise<any | null> {
-    if (!this.db) await this.initialize();
-    return Store.get(this.db, 'avatars', id);
-  }
-
-  async saveAvatar(avatar: any): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.put(this.db, 'avatars', avatar);
-  }
-
-  async getSettings(): Promise<any[]> {
-    if (!this.db) await this.initialize();
-    return Store.getAll(this.db, 'settings');
-  }
-
-  async getSetting(userId: string): Promise<any | null> {
-    if (!this.db) await this.initialize();
-    return Store.get(this.db, 'settings', userId);
-  }
-
-  async saveSetting(setting: any): Promise<void> {
-    if (!this.db) await this.initialize();
-    return Store.put(this.db, 'settings', setting);
-  }
-
-  close(): void {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
-    }
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['notifications'], 'readonly');
+      const store = transaction.objectStore('notifications');
+      const request = store.getAll();
+      request.addEventListener('error', (event) => reject(event.error));
+      request.addEventListener('complete', (event) => resolve(event.target.result));
+    });
   }
 }
 
-/**
- * Singleton instance
- */
-let indexedDBWrapper: IndexedDBWrapper | null = null;
+export const initializeIndexedDB = async (): Promise<IndexedDB> => {
+  const db = new IndexedDB();
+  await db.initialize();
+  return db;
+};
 
-export async function initializeIndexedDB(): Promise<IndexedDBWrapper> {
-  if (!indexedDBWrapper) {
-    indexedDBWrapper = new IndexedDBWrapper();
-    await indexedDBWrapper.initialize();
-  }
-  return indexedDBWrapper;
-}
-
-export function getIndexedDB(): IndexedDBWrapper | null {
-  return indexedDBWrapper;
-}
+export { IndexedDB };
+export default IndexedDB;

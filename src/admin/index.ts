@@ -1,2 +1,4 @@
-export { default as AdminLayout } from './layout';
-export { default as AdminRoutes } from './routes';
+import AdminLayout from './layout';
+import AdminRoutes from './routes';
+
+export { AdminLayout, AdminRoutes };

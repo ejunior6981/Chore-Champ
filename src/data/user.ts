@@ -1,106 +1,119 @@
-/**
- * User data access layer
- * Handles CRUD operations for users (parents and children)
- */
+import type { User } from '../types';
 
-export interface User {
-  id: string;
-  familyId: string;
-  email: string;
-  passwordHash: string;
-  name: string;
-  role: 'parent' | 'child';
-  avatarId: string;
-  points: number;
-  pinHash?: string; // Encrypted PIN for parent access
-  settings: UserSettings;
-  createdAt: number;
-  updatedAt: number;
-}
+export const getUsers = async (): Promise<User[]> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export interface UserSettings {
-  themeMode: 'light' | 'dark' | 'system';
-  notificationsEnabled: boolean;
-  language: string;
-  avatarId: string;
-}
+    const transaction = indexedDB!.transaction(['users'], 'readonly');
+    const store = transaction.objectStore('users');
+    
+    const request = store.getAll();
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      resolve(event.target.result);
+    });
+  });
+};
 
-export interface CreateUserInput {
-  familyId: string;
-  email: string;
-  passwordHash: string;
-  name: string;
-  role: 'parent' | 'child';
-  avatarId?: string;
-  pinHash?: string;
-}
+export const getUserById = async (id: string): Promise<User | null> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export interface UpdateUserInput {
-  name?: string;
-  avatarId?: string;
-  points?: number;
-  settings?: Partial<UserSettings>;
-}
+    const transaction = indexedDB!.transaction(['users'], 'readonly');
+    const store = transaction.objectStore('users');
+    
+    const request = store.get(id);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      resolve(event.target.result);
+    });
+  });
+};
 
-/**
- * User operations
- */
+export const addUser = async (input: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function getUserById(userId: string, familyId: string): Promise<User | null> {
-  // TODO: Implement with D1 database
-  console.log('getUserById:', { userId, familyId });
-  return null;
-}
+    const transaction = indexedDB!.transaction(['users'], 'readwrite');
+    const store = transaction.objectStore('users');
+    
+    const user: User = {
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      ...input,
+    };
 
-export async function getUserByEmail(email: string, familyId: string): Promise<User | null> {
-  // TODO: Implement with D1 database
-  console.log('getUserByEmail:', { email, familyId });
-  return null;
-}
+    const request = store.put(user);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      resolve(user);
+    });
+  });
+};
 
-export async function listUsers(familyId: string): Promise<User[]> {
-  // TODO: Implement with D1 database
-  console.log('listUsers:', familyId);
-  return [];
-}
+export const updateUser = async (id: string, input: Partial<User>): Promise<User> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function createUser(input: CreateUserInput): Promise<User> {
-  // TODO: Implement with D1 database
-  console.log('createUser:', input);
-  const user: User = {
-    id: crypto.randomUUID(),
-    ...input,
-    points: 0,
-    settings: {
-      themeMode: 'system',
-      notificationsEnabled: true,
-      language: 'en-US',
-      avatarId: input.avatarId || 'default-boy-robot',
-    },
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  return user;
-}
+    const transaction = indexedDB!.transaction(['users'], 'readwrite');
+    const store = transaction.objectStore('users');
+    
+    const request = store.get(id);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      const user = event.target.result as User;
+      if (user) {
+        const updated = {
+          ...user,
+          ...input,
+          updatedAt: Date.now(),
+        };
+        store.put(updated);
+        resolve(updated);
+      } else {
+        reject(new Error('User not found'));
+      }
+    });
+  });
+};
 
-export async function updateUser(userId: string, familyId: string, input: UpdateUserInput): Promise<User | null> {
-  // TODO: Implement with D1 database
-  console.log('updateUser:', { userId, familyId, input });
-  return null;
-}
+export const deleteUser = async (id: string): Promise<void> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function deleteUser(userId: string, familyId: string): Promise<void> {
-  // TODO: Implement with D1 database
-  console.log('deleteUser:', { userId, familyId });
-}
-
-export async function resetUserPoints(userId: string, familyId: string): Promise<void> {
-  // TODO: Implement with D1 database
-  console.log('resetUserPoints:', { userId, familyId });
-}
-
-export async function getFamilyMembers(familyId: string): Promise<User[]> {
-  // TODO: Implement with D1 database
-  console.log('getFamilyMembers:', familyId);
-  return [];
-}
+    const transaction = indexedDB!.transaction(['users'], 'readwrite');
+    const store = transaction.objectStore('users');
+    
+    const request = store.delete(id);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      resolve();
+    });
+  });
+};

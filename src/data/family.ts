@@ -1,92 +1,121 @@
-/**
- * Family data access layer
- * Handles family member listing and management
- */
+import type { FamilyMember } from '../types';
 
-export interface Family {
-  id: string;
-  familyId: string;
-  name?: string;
-  createdAt: number;
-  settings: FamilySettings;
-}
+export const getFamilyMembers = async (): Promise<FamilyMember[]> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export interface FamilySettings {
-  pointMultiplier?: number;
-  streakBonus?: number;
-  weeklyReset?: boolean;
-}
+    const transaction = indexedDB!.transaction(['familyMembers'], 'readonly');
+    const store = transaction.objectStore('familyMembers');
+    
+    const request = store.getAll();
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      resolve(event.target.result);
+    });
+  });
+};
 
-export interface FamilyMember {
-  id: string;
-  familyId: string;
-  userId: string;
-  name: string;
-  role: 'parent' | 'child';
-  points: number;
-  avatarId: string;
-  lastActiveAt: number;
-}
+export const addFamilyMember = async (input: Omit<FamilyMember, 'id' | 'lastActiveAt'>): Promise<FamilyMember> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export interface CreateFamilyMemberInput {
-  userId: string;
-  name: string;
-  role: 'parent' | 'child';
-  avatarId: string;
-  points?: number;
-}
+    const transaction = indexedDB!.transaction(['familyMembers'], 'readwrite');
+    const store = transaction.objectStore('familyMembers');
+    
+    const member: FamilyMember = {
+      id: crypto.randomUUID(),
+      lastActiveAt: Date.now(),
+      ...input,
+    };
 
-export interface UpdateFamilyMemberInput {
-  name?: string;
-  points?: number;
-  avatarId?: string;
-}
+    const request = store.put(member);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      resolve(member);
+    });
+  });
+};
 
-/**
- * Family operations
- */
+export const updateFamilyMember = async (id: string, input: Partial<FamilyMember>): Promise<FamilyMember> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function listFamilyMembers(familyId: string): Promise<FamilyMember[]> {
-  // TODO: Implement with D1 database
-  console.log('listFamilyMembers:', familyId);
-  return [];
-}
+    const transaction = indexedDB!.transaction(['familyMembers'], 'readwrite');
+    const store = transaction.objectStore('familyMembers');
+    
+    const request = store.get(id);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      const member = event.target.result;
+      if (member) {
+        const updated = { ...member, ...input, lastActiveAt: Date.now() };
+        store.put(updated);
+        resolve(updated);
+      } else {
+        reject(new Error('Member not found'));
+      }
+    });
+  });
+};
 
-export async function getFamilyMemberById(memberId: string, familyId: string): Promise<FamilyMember | null> {
-  // TODO: Implement with D1 database
-  console.log('getFamilyMemberById:', { memberId, familyId });
-  return null;
-}
+export const deleteFamilyMember = async (id: string): Promise<void> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function createFamilyMember(input: CreateFamilyMemberInput): Promise<FamilyMember> {
-  // TODO: Implement with D1 database
-  console.log('createFamilyMember:', input);
-  const member: FamilyMember = {
-    id: crypto.randomUUID(),
-    ...input,
-    lastActiveAt: Date.now(),
-  };
-  return member;
-}
+    const transaction = indexedDB!.transaction(['familyMembers'], 'readwrite');
+    const store = transaction.objectStore('familyMembers');
+    
+    const request = store.delete(id);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      resolve();
+    });
+  });
+};
 
-export async function updateFamilyMember(memberId: string, familyId: string, input: UpdateFamilyMemberInput): Promise<FamilyMember | null> {
-  // TODO: Implement with D1 database
-  console.log('updateFamilyMember:', { memberId, familyId, input });
-  return null;
-}
+export const resetMemberPoints = async (id: string, points: number): Promise<void> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function deleteFamilyMember(memberId: string, familyId: string): Promise<void> {
-  // TODO: Implement with D1 database
-  console.log('deleteFamilyMember:', { memberId, familyId });
-}
-
-export async function resetMemberPoints(memberId: string, familyId: string): Promise<void> {
-  // TODO: Implement with D1 database
-  console.log('resetMemberPoints:', { memberId, familyId });
-}
-
-export async function getFamily(familyId: string): Promise<Family | null> {
-  // TODO: Implement with D1 database
-  console.log('getFamily:', familyId);
-  return null;
-}
+    const transaction = indexedDB!.transaction(['familyMembers'], 'readwrite');
+    const store = transaction.objectStore('familyMembers');
+    
+    const request = store.get(id);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      const member = event.target.result;
+      if (member) {
+        const updated = { ...member, points };
+        store.put(updated);
+        resolve();
+      } else {
+        reject(new Error('Member not found'));
+      }
+    });
+  });
+};

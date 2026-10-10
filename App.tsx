@@ -1,26 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { initializeIndexedDB } from './data/indexeddb';
-import { initializeAuth } from './auth/auth-manager';
-import { initializeSyncManager } from './sync/sync-manager';
-import { initializeOfflineQueue } from './pwa/offline-queue';
 import { getThemeMode, ThemeProvider, initializeTheme, ThemeMode } from './theme/theme-provider';
-import { allUsers, allChores, allRewards, allPointRequests, allNotifications } from './data/indexeddb';
 import { User, Chore, Reward, PointRequest, Notification } from './types';
 import { ChoreStatus, ChoreRecurrence, PointRequestStatus } from './types';
-import { NotificationType } from './types/notification';
 import ThemeToggle from './components/ThemeToggle';
 import InstallPrompt from './components/InstallPrompt';
 import NotificationPanel from './components/NotificationPanel';
 import MissionControlHeader from './components/MissionControlHeader';
 import Modal from './components/Modal';
 import AvatarDisplay from './components/AvatarDisplay';
-import { UserIcon, RocketIcon, GiftIcon, InboxArrowDownIcon, BellIcon, SettingsIcon, TrashIcon, CheckIcon, XIcon, CogIcon } from './components/icons';
-import { getAuthManager } from './auth/auth-manager';
+import { UsersIcon, RocketIcon, GiftIcon, InboxArrowDownIcon, BellIcon, SettingsIcon, TrashIcon, CheckIcon, XIcon, CogIcon } from './components/icons';
 
-// Main App Component
 const App: React.FC = () => {
-  // State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -54,8 +45,8 @@ const App: React.FC = () => {
   const [showChildManagement, setShowChildManagement] = useState(false);
   const [showAvatarSelection, setShowAvatarSelection] = useState(false);
   const [showThemeSelection, setShowThemeSelection] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
-  // Form state
   const [newChoreName, setNewChoreName] = useState('');
   const [newChorePoints, setNewChorePoints] = useState('10');
   const [newChoreRequiresApproval, setNewChoreRequiresApproval] = useState(false);
@@ -73,78 +64,29 @@ const App: React.FC = () => {
   const [currentAvatar, setCurrentAvatar] = useState<string | null>(null);
   const [newAvatar, setNewAvatar] = useState<string>('boy-robot');
   const [newTheme, setNewTheme] = useState<ThemeMode>('system');
+  const [users, setUsers] = useState<User[]>([]);
+  const [choreList, setChoreList] = useState<Chore[]>([]);
+  const [rewardList, setRewardList] = useState<Reward[]>([]);
+  const [requestList, setRequestList] = useState<PointRequest[]>([]);
 
-  // Initialize IndexedDB and auth
   useEffect(() => {
     const initApp = async () => {
       try {
-        // Initialize IndexedDB
         const indexedDB = await initializeIndexedDB();
         setDb(indexedDB);
         setIsDbInitialized(true);
-
-        // Initialize auth
-        const authConfig = {
-          clientId: 'chore-champ-web',
-          apiDomain: process.env.NITRO_PREFIX || '',
-        };
-        const authManager = await initializeAuth(authConfig);
-        setAuthManager(authManager);
-
-        // Initialize sync
-        const syncManager = await initializeSyncManager();
-        setSyncManager(syncManager);
-
-        // Initialize offline queue
-        const offlineQueue = await initializeOfflineQueue();
-        setOfflineQueue(offlineQueue);
-
-        // Initialize theme
-        const themeMode = await initializeTheme();
-        setThemeMode(themeMode);
-
         console.log('App initialized');
       } catch (error) {
         console.error('Failed to initialize app:', error);
       }
     };
-
     initApp();
   }, []);
 
-  // Check for existing session
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const authManagerInstance = getAuthManager();
-        if (authManagerInstance) {
-          const session = await authManagerInstance.getSession?.();
-          if (session) {
-            setIsAuthenticated(true);
-            setCurrentUser(session.user || null);
-            setCurrentUserId(session.userId || null);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to check session:', error);
-      }
-    };
-
-    checkSession();
-  }, []);
-
-  // LocalStorage data for backward compatibility
-  const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', allUsers);
-  const [currentUserIdStr, setCurrentUserIdStr] = useLocalStorage<string | null>('chore-champ-currentUser', null);
-
-  const currentUserFromStorage = useMemo(() => users.find(u => u.id === currentUserIdStr), [users, currentUserIdStr]);
-
-  // Validate PIN
   const validatePin = (entered: string): boolean => {
     return entered === pin;
   };
 
-  // Handle full screen toggle
   const handleToggleFullScreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => {
@@ -157,37 +99,30 @@ const App: React.FC = () => {
     }
   };
 
-  // Handle notifications panel close
   const handleCloseNotifications = () => {
     setIsNotificationsOpen(false);
   };
 
-  // Handle notifications panel toggle
   const handleToggleNotifications = () => {
     setIsNotificationsOpen(!isNotificationsOpen);
   };
 
-  // Handle opening settings
   const handleOpenSettings = () => {
     setIsSettingsOpen(true);
   };
 
-  // Handle closing settings
   const handleCloseSettings = () => {
     setIsSettingsOpen(false);
   };
 
-  // Handle install prompt
   const handleInstallPrompt = () => {
     setIsInstallPromptOpen(true);
   };
 
-  // Handle closing install prompt
   const handleCloseInstallPrompt = () => {
     setIsInstallPromptOpen(false);
   };
 
-  // Handle opening add chore modal
   const handleOpenAddChore = () => {
     setNewChoreName('');
     setNewChorePoints('10');
@@ -198,16 +133,14 @@ const App: React.FC = () => {
     setShowAddChoreModal(true);
   };
 
-  // Handle closing add chore modal
   const handleCloseAddChore = () => {
     setShowAddChoreModal(false);
   };
 
-  // Handle adding chore
   const handleAddChore = (e: React.FormEvent) => {
     e.preventDefault();
     const newChore: Chore = {
-      id: crypto.randomUUID(),
+      id: Date.now() as unknown as number,
       name: newChoreName,
       points: parseInt(newChorePoints, 10),
       status: ChoreStatus.Incomplete,
@@ -216,11 +149,10 @@ const App: React.FC = () => {
       description: newChoreDescription,
       assignedTo: newChoreAssignedTo === 'unassigned' ? undefined : parseInt(newChoreAssignedTo, 10),
     };
-    setChores(prev => [...prev, newChore]);
+    setChoreList(prev => [...prev, newChore]);
     closeModal();
   };
 
-  // Handle opening edit chore modal
   const handleOpenEditModal = (choreToEdit: Chore) => {
     setEditingChore(choreToEdit);
     setNewChoreName(choreToEdit.name);
@@ -233,7 +165,6 @@ const App: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // Handle editing chore
   const handleEditChore = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingChore) return;
@@ -248,47 +179,41 @@ const App: React.FC = () => {
       recurrence: newChoreRecurrence,
     };
 
-    setChores(prev => prev.map(c => c.id === editingChore.id ? updatedChore : c));
+    setChoreList(prev => prev.map(c => c.id === editingChore.id ? updatedChore : c));
     closeModal();
   };
 
-  // Handle opening add reward modal
   const handleOpenAddReward = () => {
     setNewRewardName('');
     setNewRewardPoints('100');
     setShowAddRewardModal(true);
   };
 
-  // Handle closing add reward modal
   const handleCloseAddReward = () => {
     setShowAddRewardModal(false);
   };
 
-  // Handle adding reward
   const handleAddReward = (e: React.FormEvent) => {
     e.preventDefault();
     const newReward: Reward = {
-      id: crypto.randomUUID(),
+      id: Date.now() as unknown as number,
       name: newRewardName,
       points: parseInt(newRewardPoints, 10),
     };
-    setRewards(prev => [...prev, newReward]);
+    setRewardList(prev => [...prev, newReward]);
     closeModal();
   };
 
-  // Handle opening add points modal
   const handleOpenAddPoints = () => {
     setManualPoints('');
     setManualPointsUser('');
     setShowAddPointsModal(true);
   };
 
-  // Handle closing add points modal
   const handleCloseAddPoints = () => {
     setShowAddPointsModal(false);
   };
 
-  // Handle adding points
   const handleAddPoints = (e: React.FormEvent) => {
     e.preventDefault();
     const pointsToAdd = parseInt(manualPoints, 10);
@@ -299,7 +224,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Handle opening add request modal
   const handleOpenAddRequest = () => {
     setManualRequestDescription('');
     setManualRequestPoints('');
@@ -307,38 +231,33 @@ const App: React.FC = () => {
     setShowAddRequestModal(true);
   };
 
-  // Handle closing add request modal
   const handleCloseAddRequest = () => {
     setShowAddRequestModal(false);
   };
 
-  // Handle adding request
   const handleAddRequest = (e: React.FormEvent) => {
     e.preventDefault();
     const newRequest: PointRequest = {
-      id: crypto.randomUUID(),
+      id: Date.now() as unknown as number,
       userId: parseInt(manualRequestUser, 10),
       description: manualRequestDescription,
       points: parseInt(manualRequestPoints, 10),
       status: PointRequestStatus.Pending,
     };
-    setRequests(prev => [...prev, newRequest]);
+    setRequestList(prev => [...prev, newRequest]);
     closeModal();
   };
 
-  // Handle opening profile modal
   const handleOpenProfileModal = () => {
     setCurrentAvatar(currentUser?.avatarId || null);
     setNewAvatar(currentUser?.avatarId || 'boy-robot');
     setShowProfileModal(true);
   };
 
-  // Handle closing profile modal
   const handleCloseProfileModal = () => {
     setShowProfileModal(false);
   };
 
-  // Handle saving avatar
   const handleSaveAvatar = (avatarId: string) => {
     if (currentUser) {
       const updatedUser: User = {
@@ -353,50 +272,41 @@ const App: React.FC = () => {
     }
   };
 
-  // Handle opening child management
   const handleOpenChildManagement = () => {
     setShowChildManagement(true);
   };
 
-  // Handle closing child management
   const handleCloseChildManagement = () => {
     setShowChildManagement(false);
   };
 
-  // Handle opening avatar selection
   const handleOpenAvatarSelection = () => {
     setShowAvatarSelection(true);
   };
 
-  // Handle closing avatar selection
   const handleCloseAvatarSelection = () => {
     setShowAvatarSelection(false);
   };
 
-  // Handle opening theme selection
   const handleOpenThemeSelection = () => {
     setShowThemeSelection(true);
   };
 
-  // Handle closing theme selection
   const handleCloseThemeSelection = () => {
     setShowThemeSelection(false);
   };
 
-  // Handle saving theme
   const handleSaveTheme = (themeMode: ThemeMode) => {
     setThemeMode(themeMode);
     localStorage.setItem('chore-champ-theme', themeMode);
     handleCloseThemeSelection();
   };
 
-  // Handle theme mode change
   const handleThemeModeChange = (mode: ThemeMode) => {
     setThemeMode(mode);
     localStorage.setItem('chore-champ-theme', mode);
   };
 
-  // Handle closing modals
   const closeModal = () => {
     setShowAddChoreModal(false);
     setShowEditChoreModal(false);
@@ -406,51 +316,41 @@ const App: React.FC = () => {
     setShowProfileModal(false);
   };
 
-  // Handle clearing notifications
   const handleClearNotifications = () => {
     setNotifications([]);
     setUnreadNotificationsCount(0);
   };
 
-  // Handle marking notification as read
-  const handleMarkRead = (notificationId: number) => {
+  const handleMarkRead = (notificationId: string) => {
     setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read: true } : n));
   };
 
-  // Handle deleting notification
-  const handleDeleteNotification = (notificationId: number) => {
+  const handleDeleteNotification = (notificationId: string) => {
     setNotifications(prev => prev.filter(n => n.id !== notificationId));
   };
 
-  // Handle loading data from IndexedDB
   useEffect(() => {
     if (db && isDbInitialized) {
       const loadData = async () => {
         try {
           const users = await db.users.getAll();
-          setAllUsers(users);
-          
+          setUsers(users);
           const chores = await db.chores.getAll();
-          setAllChores(chores);
-          
+          setChoreList(chores);
           const rewards = await db.rewards.getAll();
-          setAllRewards(rewards);
-          
+          setRewardList(rewards);
           const pointRequests = await db.pointRequests.getAll();
-          setAllPointRequests(pointRequests);
-          
+          setRequestList(pointRequests);
           const notifications = await db.notifications.getAll();
-          setAllNotifications(notifications);
+          setNotifications(notifications);
         } catch (error) {
           console.error('Failed to load data:', error);
         }
       };
-
       loadData();
     }
   }, [db, isDbInitialized]);
 
-  // Render
   return (
     <ThemeProvider themeMode={themeMode}>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
@@ -800,7 +700,6 @@ const App: React.FC = () => {
         <NotificationPanel
           notifications={notifications}
           onClose={handleCloseNotifications}
-          onClear={handleClearNotifications}
         />
       )}
 
@@ -816,6 +715,5 @@ const App: React.FC = () => {
   );
 };
 
-// Create root
 const root = createRoot(document.getElementById('root'));
 root.render(<App />);

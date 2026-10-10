@@ -1,171 +1,165 @@
-
-import React, { useState, useRef, useEffect } from 'react';
-import { RocketIcon, BellIcon, ChevronDownIcon, LogoutIcon } from '../icons';
-import { User, Notification } from '../../types';
-import AvatarDisplay from '../AvatarDisplay';
+import React, { useState } from 'react';
+import { BellIcon, CogIcon } from '../icons';
 import NotificationPanel from '../NotificationPanel';
-import { RefreshCwIcon } from '../icons';
+import AvatarDisplay from '../AvatarDisplay';
 
-interface MissionControlHeaderProps {
-  points: number;
-  currentUser: User | undefined;
-  allUsers: User[];
-  onUserChange: (userId: number) => void;
-  onEditProfile: () => void;
-  onLogout: () => void;
-  onResetData: () => void;
-  unreadNotificationsCount: number;
-  onToggleNotifications: () => void;
-  isNotificationsOpen: boolean;
-  notifications: Notification[];
-  onClearNotifications: () => void;
-  resetButton?: boolean;
+interface NotificationPanelProps {
+  notifications: Array<{ id: string; message: string; timestamp: number; read: boolean; type: string }>;
+  onClose: () => void;
 }
 
-const MissionControlHeader: React.FC<MissionControlHeaderProps> = ({ 
-  points, 
-  currentUser, 
-  allUsers, 
-  onUserChange, 
-  onEditProfile, 
-  onLogout, 
-  onResetData, 
-  unreadNotificationsCount, 
-  onToggleNotifications, 
-  isNotificationsOpen, 
-  notifications, 
-  onClearNotifications,
-  resetButton = false 
-}) => {
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
+const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications, onClose }) => {
+  const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setIsUserMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleUserSelect = (userId: number) => {
-    onUserChange(userId);
-    setIsUserMenuOpen(false);
+  const handleToggle = () => {
+    setIsOpen(!isOpen);
   };
-  
-  // Calculate orb pulse intensity based on pending chores
-  const pendingChores = 0; // Would be passed as prop in real implementation
-  const pulseIntensity = Math.min(pendingChores * 2, 100); // Max 100% intensity
+
+  const handleClear = () => {
+    console.log('Clear notifications');
+  };
 
   return (
-    <header className="bg-gradient-to-r from-[#1E3A5F] to-[#7C3AED] text-white shadow-lg sticky top-0 z-40">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-wide uppercase">
-          Mission Control
-        </h1>
-        <div className="flex items-center space-x-2 sm:space-x-4">
-          {/* Points display with rocket icon */}
-          <div className="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2">
-            <RocketIcon className="w-6 h-6 sm:w-8 sm:h-8 text-[#FBBF24]" />
-            <span className="text-2xl sm:text-3xl font-bold text-white">{currentUser?.role === 'child' ? points : '–'}</span>
-            <span className="text-xs sm:text-sm text-white/80 font-medium">FUEL</span>
-          </div>
-          
-          {/* Notifications bell */}
-          <div className="relative">
-            <button 
-              onClick={onToggleNotifications} 
-              className={`relative p-2 rounded-full transition-colors ${isNotificationsOpen ? 'bg-white/30' : 'bg-white/20 hover:bg-white/30'}`}
-              aria-label="Toggle notifications"
-            >
-              <BellIcon className="w-6 h-6 text-white"/>
-              {unreadNotificationsCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#F97316] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center border-2 border-[#7C3AED]">
-                  {unreadNotificationsCount}
-                </span>
-              )}
+    <>
+      <button
+        onClick={handleToggle}
+        className="fixed top-4 right-4 p-3 bg-indigo-500 text-white rounded-full shadow-lg z-40 hover:bg-indigo-600 transition-colors"
+      >
+        <BellIcon className="w-6 h-6" />
+      </button>
+
+      {isOpen && (
+        <div className="fixed top-16 right-4 w-80 bg-white dark:bg-slate-800 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+          <div className="p-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <h3 className="font-semibold">Notifications</h3>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+              ✕
             </button>
-            {isNotificationsOpen && (
-              <NotificationPanel
-                notifications={notifications}
-                onClose={onToggleNotifications}
-                onClear={onClearNotifications}
-              />
+          </div>
+          <div className="p-3 space-y-2">
+            {notifications.length === 0 ? (
+              <p className="text-sm text-slate-500">No notifications</p>
+            ) : (
+              notifications.map(notification => (
+                <div key={notification.id} className="p-2 bg-slate-50 dark:bg-slate-700 rounded">
+                  <p className="text-sm">{notification.message}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {new Date(notification.timestamp).toLocaleString()}
+                  </p>
+                </div>
+              ))
             )}
           </div>
+        </div>
+      )}
+    </>
+  );
+};
 
-          {/* User menu */}
-          <div className="relative" ref={userMenuRef}>
-             <button
-                onClick={() => setIsUserMenuOpen(prev => !prev)}
-                className="flex items-center space-x-2 text-white bg-white/20 hover:bg-white/30 rounded-full pl-3 pr-2 py-2 text-sm font-medium transition-colors"
-              >
-                <AvatarDisplay avatar={currentUser?.avatar} sizeClass="w-8 h-8" />
-                <span className="font-semibold">{currentUser?.name || '...'}</span>
-                <ChevronDownIcon className="w-5 h-5 opacity-70"/>
-              </button>
+interface MissionControlHeaderProps {
+  notifications: Array<{ id: string; message: string; timestamp: number; read: boolean; type: string }>;
+  onClose: () => void;
+  onToggle?: () => void;
+}
 
-              {isUserMenuOpen && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-lg shadow-2xl border border-slate-200 z-50 overflow-hidden">
-                  <ul>
-                    {allUsers.map(user => (
-                      <li key={user.id}>
-                        <button
-                          onClick={() => handleUserSelect(user.id)}
-                          className={`w-full text-left flex items-center space-x-3 p-3 transition-colors ${currentUser?.id === user.id ? 'bg-[#EC4899]/10 text-[#7C3AED] font-bold' : 'text-slate-700 hover:bg-slate-100'}`}
-                        >
-                          <AvatarDisplay avatar={user.avatar} sizeClass="w-8 h-8" />
-                          <span>{user.name}</span>
-                        </button>
-                      </li>
-                    ))}
-                     {currentUser?.role === 'child' && (
-                      <>
-                        <hr className="my-1" />
-                         <li>
-                            <button
-                                onClick={() => { onEditProfile(); setIsUserMenuOpen(false); }}
-                                className="w-full text-left p-3 text-slate-700 hover:bg-slate-100 transition-colors"
-                            >
-                                Edit Profile
-                            </button>
-                        </li>
-                      </>
-                    )}
-                    {currentUser?.role === 'parent' && (
-                      <>
-                        <hr className="my-1" />
-                        <li>
-                            <button
-                                onClick={onLogout}
-                                className="w-full text-left p-3 text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2"
-                            >
-                                <LogoutIcon className="h-5 w-5" />
-                                <span>Logout</span>
-                            </button>
-                        </li>
-                        <hr className="my-1" />
-                        <li>
-                            <button
-                                onClick={onResetData}
-                                className="w-full text-left p-3 text-amber-600 hover:bg-amber-50 transition-colors flex items-center gap-2"
-                            >
-                                <RefreshCwIcon className="h-5 w-5" />
-                                <span>Reset All Data</span>
-                            </button>
-                        </li>
-                      </>
-                    )}
-                  </ul>
-                </div>
-              )}
-          </div>
+const MissionControlHeader: React.FC<MissionControlHeaderProps> = ({ notifications, onClose, onToggle }) => {
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ avatarId: string; name: string } | null>(null);
+
+  const handleToggleNotifications = () => {
+    if (onToggle) onToggle();
+    else setIsNotificationsOpen(!isNotificationsOpen);
+  };
+
+  const handleCloseNotifications = () => {
+    setIsNotificationsOpen(false);
+  };
+
+  const handleOpenProfile = () => {
+    setIsProfileModalOpen(true);
+  };
+
+  const handleCloseProfile = () => {
+    setIsProfileModalOpen(false);
+  };
+
+  return (
+    <header className="fixed top-0 left-0 right-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 z-30 px-4 py-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold">Chore Champ</h1>
+          {currentUser && (
+            <div className="flex items-center gap-2">
+              <AvatarDisplay avatarId={currentUser.avatarId} sizeClass="w-8 h-8" />
+              <span className="font-semibold">{currentUser.name || '...'}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+          >
+            <BellIcon className="w-5 h-5" />
+          </button>
+
+          {onToggle && (
+            <button
+              onClick={handleToggleNotifications}
+              className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+            >
+              <BellIcon className="w-5 h-5" />
+            </button>
+          )}
+
+          <button
+            onClick={handleOpenProfile}
+            className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+          >
+            <CogIcon className="w-5 h-5" />
+          </button>
         </div>
       </div>
+
+      {isNotificationsOpen && (
+        <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg">
+          <NotificationPanel notifications={notifications} onClose={handleCloseNotifications} />
+        </div>
+      )}
+
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold mb-4 text-slate-800 dark:text-slate-100">
+              Select Your Avatar
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              Choose an avatar to represent yourself in the app.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleCloseProfile}
+                className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold py-3 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  // Save avatar logic here
+                  handleCloseProfile();
+                }}
+                className="flex-1 bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-600 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
 
-export default MissionControlHeader;
+export { NotificationPanel, MissionControlHeader };

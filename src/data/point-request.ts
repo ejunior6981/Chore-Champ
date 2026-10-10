@@ -1,82 +1,101 @@
-/**
- * Point Request data access layer
- * Handles point request CRUD operations and approval/denial
- */
-
 import type { PointRequest, PointRequestStatus } from '../types';
 
-export interface PointRequestApproval {
-  requestId: string;
-  approvedBy: string;
-  approvedAt: number;
-  status: PointRequestStatus;
-  notes?: string;
-}
+export const getPointRequests = async (): Promise<PointRequest[]> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export interface PointRequestApprovalInput {
-  requestId: string;
-  approvedBy: string;
-  status: PointRequestStatus;
-  notes?: string;
-}
+    const transaction = indexedDB!.transaction(['pointRequests'], 'readonly');
+    const store = transaction.objectStore('pointRequests');
+    
+    const request = store.getAll();
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      resolve(event.target.result);
+    });
+  });
+};
 
-/**
- * Point Request operations
- */
+export const addPointRequest = async (request: PointRequest): Promise<PointRequest> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function getPointRequestById(requestId: string, familyId: string): Promise<PointRequest | null> {
-  // TODO: Implement with D1 database
-  console.log('getPointRequestById:', { requestId, familyId });
-  return null;
-}
+    const transaction = indexedDB!.transaction(['pointRequests'], 'readwrite');
+    const store = transaction.objectStore('pointRequests');
+    
+    const reqRequest = store.put(request);
+    reqRequest.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    reqRequest.addEventListener('complete', (event) => {
+      resolve(request);
+    });
+  });
+};
 
-export async function listPointRequests(familyId: string, options?: {
-  status?: PointRequestStatus;
-  userId?: string;
-}): Promise<PointRequest[]> {
-  // TODO: Implement with D1 database
-  console.log('listPointRequests:', { familyId, ...options });
-  return [];
-}
+export const approvePointRequest = async (id: string, points: number): Promise<void> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function createPointRequest(familyId: string, request: Omit<PointRequest, 'id' | 'createdAt' | 'updatedAt'>): Promise<PointRequest> {
-  // TODO: Implement with D1 database
-  console.log('createPointRequest:', { familyId, request });
-  const newRequest: PointRequest = {
-    id: crypto.randomUUID(),
-    ...request,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  return newRequest;
-}
+    const transaction = indexedDB!.transaction(['pointRequests'], 'readwrite');
+    const store = transaction.objectStore('pointRequests');
+    
+    const request = store.get(id);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      const pointRequest = event.target.result as PointRequest;
+      if (pointRequest) {
+        const updated = {
+          ...pointRequest,
+          status: 'APPROVED',
+        };
+        store.put(updated);
+        resolve();
+      } else {
+        reject(new Error('Request not found'));
+      }
+    });
+  });
+};
 
-export async function updatePointRequest(requestId: string, familyId: string, request: Partial<PointRequest>): Promise<PointRequest | null> {
-  // TODO: Implement with D1 database
-  console.log('updatePointRequest:', { requestId, familyId, request });
-  return null;
-}
+export const denyPointRequest = async (id: string): Promise<void> => {
+  const indexedDB = await window.indexedDB.open('chore-champ');
+  return new Promise((resolve, reject) => {
+    indexedDB.addEventListener('error', (event) => {
+      reject(event.error);
+    });
 
-export async function approvePointRequest(requestId: string, familyId: string, userId: string): Promise<PointRequest | null> {
-  // TODO: Implement with D1 database
-  console.log('approvePointRequest:', { requestId, familyId, userId });
-  return null;
-}
-
-export async function denyPointRequest(requestId: string, familyId: string, userId: string): Promise<PointRequest | null> {
-  // TODO: Implement with D1 database
-  console.log('denyPointRequest:', { requestId, familyId, userId });
-  return null;
-}
-
-export async function getPendingRequests(familyId: string): Promise<PointRequest[]> {
-  // TODO: Implement with D1 database
-  console.log('getPendingRequests:', familyId);
-  return [];
-}
-
-export async function getUserRequests(userId: string, familyId: string): Promise<PointRequest[]> {
-  // TODO: Implement with D1 database
-  console.log('getUserRequests:', { userId, familyId });
-  return [];
-}
+    const transaction = indexedDB!.transaction(['pointRequests'], 'readwrite');
+    const store = transaction.objectStore('pointRequests');
+    
+    const request = store.get(id);
+    request.addEventListener('error', (event) => {
+      reject(event.error);
+    });
+    request.addEventListener('complete', (event) => {
+      const pointRequest = event.target.result as PointRequest;
+      if (pointRequest) {
+        const updated = {
+          ...pointRequest,
+          status: 'DENIED',
+        };
+        store.put(updated);
+        resolve();
+      } else {
+        reject(new Error('Request not found'));
+      }
+    });
+  });
+};
