@@ -27,20 +27,13 @@ export const ThemeProvider: React.FC<{
     }
   }, []);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    if (themeMode === 'system') {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.classList.toggle('dark', prefersDark);
-    } else {
-      root.classList.toggle('dark', themeMode === 'dark');
-    }
-    localStorage.setItem('chore-champ-theme', themeMode);
-  }, [themeMode]);
+  const themeClass = themeMode === 'dark' ? 'dark' : '';
 
   return (
     <ThemeContext.Provider value={{ themeMode, setThemeMode: setThemeModeState }}>
-      {children}
+      <div className={themeClass}>
+        {children}
+      </div>
     </ThemeContext.Provider>
   );
 };

@@ -8,7 +8,7 @@ export interface Notification extends AppNotification {
   type: NotificationType;
 }
 
-export interface PointRequest as AppPointRequest {
+export interface PointRequest {
   id: string;
   userId: number;
   description: string;
@@ -18,7 +18,7 @@ export interface PointRequest as AppPointRequest {
 
 export type PointRequestStatus = 'PENDING' | 'APPROVED' | 'DENIED';
 
-export interface Chore as AppChore {
+export interface Chore {
   id: string;
   name: string;
   points: number;
@@ -32,13 +32,13 @@ export interface Chore as AppChore {
 export type ChoreStatus = 'INCOMPLETE' | 'COMPLETED' | 'APPROVED';
 export type ChoreRecurrence = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
-export interface Reward as AppReward {
+export interface Reward {
   id: string;
   name: string;
   points: number;
 }
 
-export interface User as AppUser {
+export interface User {
   id: string;
   name: string;
   email: string;
