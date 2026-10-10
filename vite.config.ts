@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import dyadComponentTagger from '@dyad-sh/react-vite-component-tagger';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -11,16 +10,22 @@ export default defineConfig(({ mode }) => {
     
     return {
       server: {
-        port: 3000,
-        host: 'localhost',
-        strictPort: true,
+        port: 5173,
+        host: true,
+        strictPort: false,
       },
       build: {
-        target: 'esnext',
+        target: 'es2015',
         sourcemap: true,
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+            },
+          },
+        },
       },
       plugins: [
-        dyadComponentTagger(),
         react(),
       ],
       envDir: '.',
