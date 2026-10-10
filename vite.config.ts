@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import dyadComponentTagger from '@dyad-sh/react-vite-component-tagger';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +26,7 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
-      plugins: [
+      plugins: [dyadComponentTagger(), 
         react(),
       ],
       envDir: '.',
