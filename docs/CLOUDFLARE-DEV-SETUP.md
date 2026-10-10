@@ -16,6 +16,18 @@ Your app is currently deployed to:
 
 ## Quick Start: Setting Up Dev/Test Environments
 
+### Automated Git Branch Setup
+
+From the repository root, run:
+
+```bash
+bash scripts/setup-cloudflare-branches.sh chore-champ
+```
+
+The script creates missing `dev` and `test` branches from the current commit, reuses existing local branches, or fetches an existing remote branch when there is no local one. It then pushes each branch to `origin`. Only committed changes are included. The script does not need Wrangler or a Cloudflare API token; Cloudflare Pages deploys pushed branches when the Pages project is connected to the repository.
+
+After it completes, configure the production branch, preview deployments, branch-specific settings, and environment variables in the Cloudflare dashboard. The script creates `.env.cloudflare` as a checklist if that file does not already exist; it does not overwrite an existing one.
+
 ### Step 1: Create Branches in GitHub
 
 ```bash
