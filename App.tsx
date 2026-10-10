@@ -11,6 +11,52 @@ import Modal from './components/Modal';
 import AvatarDisplay from './components/AvatarDisplay';
 import { UsersIcon, RocketIcon, GiftIcon, InboxArrowDownIcon, BellIcon, SettingsIcon, TrashIcon, CheckIcon, XIcon, CogIcon } from './components/icons';
 
+// Local database utility for development
+const createLocalDatabase = async (): Promise<IDbDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('ChoreChampLocalDB', 1);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      
+      // Create stores
+      if (!db.objectStoreNames.contains('users')) {
+        const userStore = db.createObjectStore('users', { keyPath: 'id', autoIncrement: true });
+        userStore.createIndex('name', 'name', { unique: false });
+        userStore.createIndex('role', 'role', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('chores')) {
+        const choreStore = db.createObjectStore('chores', { keyPath: 'id', autoIncrement: true });
+        choreStore.createIndex('name', 'name', { unique: false });
+        choreStore.createIndex('status', 'status', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('rewards')) {
+        const rewardStore = db.createObjectStore('rewards', { keyPath: 'id', autoIncrement: true });
+        rewardStore.createIndex('name', 'name', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('pointRequests')) {
+        const requestStore = db.createObjectStore('pointRequests', { keyPath: 'id', autoIncrement: true });
+        requestStore.createIndex('status', 'status', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('notifications')) {
+        const notificationStore = db.createObjectStore('notifications', { keyPath: 'id', autoIncrement: true });
+        notificationStore.createIndex('read', 'read', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('avatars')) {
+        db.createObjectStore('avatars', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+  });
+};
+
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -39,7 +85,7 @@ const App: React.FC = () => {
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInstallPromptOpen, setIsInstallPromptOpen] = useState(false);
-  const [db, setDb] = useState<any>(null);
+  const [db, setDb] = useState<IDbDatabase | null>(null);
   const [isDbInitialized, setIsDbInitialized] = useState(false);
   const [showFamilySelection, setShowFamilySelection] = useState(false);
   const [showChildManagement, setShowChildManagement] = useState(false);
@@ -72,10 +118,36 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       try {
-        const indexedDB = await initializeIndexedDB();
-        setDb(indexedDB);
+        const localDb = await createLocalDatabase();
+        setDb(localDb);
         setIsDbInitialized(true);
-        console.log('App initialized');
+        
+        // Load sample data for testing
+        const sampleUsers: User[] = [
+          { id: 1, name: 'Mom', role: 'parent', avatarId: 'girl-robot', points: 500, theme: 'system' },
+          { id: 2, name: 'Dad', role: 'parent', avatarId: 'boy-robot', points: 450, theme: 'system' },
+          { id: 3, name: 'Alex', role: 'child', avatarId: 'boy-robot', points: 200, theme: 'system' },
+          { id: 4, name: 'Sam', role: 'child', avatarId: 'girl-robot', points: 150, theme: 'system' },
+        ];
+        setUsers(sampleUsers);
+        
+        const sampleChores: Chore[] = [
+          { id: 1, name: 'Feed the pets', points: 10, status: ChoreStatus.Incomplete, requiresApproval: true, recurrence: 'DAILY', description: 'Feed the dog and cat', assignedTo: 3 },
+          { id: 2, name: 'Take out trash', points: 15, status: ChoreStatus.Incomplete, requiresApproval: false, recurrence: 'WEEKLY', description: 'Take out kitchen trash', assignedTo: 4 },
+          { id: 3, name: 'Make bed', points: 5, status: ChoreStatus.Incomplete, requiresApproval: false, recurrence: 'DAILY', description: 'Make your bed each morning', assignedTo: 3 },
+          { id: 4, name: 'Clean room', points: 20, status: ChoreStatus.Incomplete, requiresApproval: true, recurrence: 'WEEKLY', description: 'Clean and organize your room', assignedTo: 4 },
+        ];
+        setChoreList(sampleChores);
+        
+        const sampleRewards: Reward[] = [
+          { id: 1, name: 'Extra Screen Time', points: 100 },
+          { id: 2, name: 'Choose Dinner', points: 50 },
+          { id: 3, name: 'Sleepover', points: 200 },
+          { id: 4, name: 'Toy Store Visit', points: 150 },
+        ];
+        setRewardList(sampleRewards);
+        
+        console.log('App initialized with sample data');
       } catch (error) {
         console.error('Failed to initialize app:', error);
       }
@@ -333,15 +405,15 @@ const App: React.FC = () => {
     if (db && isDbInitialized) {
       const loadData = async () => {
         try {
-          const users = await db.users.getAll();
+          const users = await db.transaction(['users'], 'readonly').objectStore('users').getAll();
           setUsers(users);
-          const chores = await db.chores.getAll();
+          const chores = await db.transaction(['chores'], 'readonly').objectStore('chores').getAll();
           setChoreList(chores);
-          const rewards = await db.rewards.getAll();
+          const rewards = await db.transaction(['rewards'], 'readonly').objectStore('rewards').getAll();
           setRewardList(rewards);
-          const pointRequests = await db.pointRequests.getAll();
+          const pointRequests = await db.transaction(['pointRequests'], 'readonly').objectStore('pointRequests').getAll();
           setRequestList(pointRequests);
-          const notifications = await db.notifications.getAll();
+          const notifications = await db.transaction(['notifications'], 'readonly').objectStore('notifications').getAll();
           setNotifications(notifications);
         } catch (error) {
           console.error('Failed to load data:', error);
@@ -350,6 +422,16 @@ const App: React.FC = () => {
       loadData();
     }
   }, [db, isDbInitialized]);
+
+  // Initialize theme
+  useEffect(() => {
+    const initTheme = async () => {
+      const theme = getThemeMode();
+      setThemeMode(theme);
+      await initializeTheme(theme);
+    };
+    initTheme();
+  }, []);
 
   return (
     <ThemeProvider themeMode={themeMode}>
@@ -448,10 +530,84 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* User List Display */}
+          <div className="mt-8">
+            <h2 className="text-xl font-bold mb-4">Family Members</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {users.map(user => (
+                <div key={user.id} className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <AvatarDisplay avatarId={user.avatarId || 'boy-robot'} sizeClass="w-10 h-10" />
+                    <div>
+                      <p className="font-semibold">{user.name}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {user.role === 'parent' ? 'Parent' : 'Child'} • {user.points} points
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Chore List Display */}
+          <div className="mt-8">
+            <h2 className="text-xl font-bold mb-4">Chores</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {choreList.map(chore => (
+                <div key={chore.id} className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-semibold">{chore.name}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{chore.points} points</p>
+                      {chore.description && <p className="text-xs text-slate-400 mt-1">{chore.description}</p>}
+                      <div className="mt-2 flex gap-2">
+                        <span className="text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-2 py-1 rounded">
+                          {chore.recurrence}
+                        </span>
+                        {chore.requiresApproval && (
+                          <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 px-2 py-1 rounded">
+                            Approval Required
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleOpenEditModal(chore)}
+                        className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+                      >
+                        <CogIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Rewards List Display */}
+          <div className="mt-8">
+            <h2 className="text-xl font-bold mb-4">Rewards</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {rewardList.map(reward => (
+                <div key={reward.id} className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg p-4 shadow-sm border-2 border-amber-200 dark:border-amber-800">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-semibold text-amber-900 dark:text-amber-100">{reward.name}</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">{reward.points} points</p>
+                    </div>
+                    <GiftIcon className="w-6 h-6 text-amber-500" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </main>
 
         <footer className="border-t border-slate-200 dark:border-slate-800 p-4 text-center text-sm text-slate-600 dark:text-slate-400">
-          Chore Champ v1.0.0
+          Chore Champ v1.0.0 - Local Development Mode
         </footer>
 
         {/* Modals */}
@@ -515,6 +671,9 @@ const App: React.FC = () => {
                   className="w-full p-2 border rounded-lg"
                 >
                   <option value="unassigned">Anyone</option>
+                  {users.filter(u => u.role === 'child').map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
                 </select>
               </div>
 
