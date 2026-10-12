@@ -46,6 +46,12 @@ export interface User {
   role: UserRole;
   avatar: string | null;
   points: number;
+  familyId: string;
+  email: string;
+  passwordHash: string;
+  avatarId: string;
+  pinHash?: string;
+  settings?: string;
 }
 
 export enum PointRequestStatus {
@@ -63,9 +69,23 @@ export interface PointRequest {
 }
 
 export interface Notification {
-  id: number;
-  message: string;
-  timestamp: number;
+  id: string;
+  familyId: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  data: NotificationData;
   read: boolean;
-  targetRole: UserRole;
+  createdAt: number;
+  expiresAt?: number;
+}
+
+export interface NotificationData {
+  choreId?: string;
+  requestId?: string;
+  rewardId?: string;
+  choreName?: string;
+  points?: number;
+  action?: 'view' | 'complete' | 'redeem';
 }

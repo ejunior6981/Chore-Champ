@@ -1,447 +1,211 @@
+import React, { useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+import { ThemeProvider, getThemeMode, ThemeMode } from './theme/theme-provider';
+import { User, Chore, Reward, PointRequest, Notification } from './types';
+import { ChoreStatus, ChoreRecurrence, PointRequestStatus } from './types';
 
-
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Chore, Reward, View, ChoreStatus, ChoreRecurrence, UserRole, PointRequest, PointRequestStatus, User } from './types';
-import type { Notification } from './types';
-import { useLocalStorage, useStorageReset } from './hooks/useLocalStorage';
-import Header from './components/Header';
-import ChoreCard from './components/ChoreCard';
-import RewardCard from './components/RewardCard';
-import PointRequestCard from './components/PointRequestCard';
-import Modal from './components/Modal';
-import ProfileModal from './components/ProfileModal';
-import { PlusIcon, GiftIcon, StarIcon, CogIcon, InboxArrowDownIcon, UsersIcon, PencilIcon, TrashIcon, LockIcon, RefreshCwIcon } from './components/icons';
-import AvatarDisplay from './components/AvatarDisplay';
-
-const DEFAULT_PIN = '6981';
+// Local database utility for development
+const createLocalDatabase = async (): Promise<IDbDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('ChoreChampLocalDB', 1);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      
+      // Create stores
+      if (!db.objectStoreNames.contains('users')) {
+        const userStore = db.createObjectStore('users', { keyPath: 'id', autoIncrement: true });
+        userStore.createIndex('name', 'name', { unique: false });
+        userStore.createIndex('role', 'role', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('chores')) {
+        const choreStore = db.createObjectStore('chores', { keyPath: 'id', autoIncrement: true });
+        choreStore.createIndex('name', 'name', { unique: false });
+        choreStore.createIndex('status', 'status', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('rewards')) {
+        const rewardStore = db.createObjectStore('rewards', { keyPath: 'id', autoIncrement: true });
+        rewardStore.createIndex('name', 'name', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('pointRequests')) {
+        const requestStore = db.createObjectStore('pointRequests', { keyPath: 'id', autoIncrement: true });
+        requestStore.createIndex('status', 'status', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('notifications')) {
+        const notificationStore = db.createObjectStore('notifications', { keyPath: 'id', autoIncrement: true });
+        notificationStore.createIndex('read', 'read', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('avatars')) {
+        db.createObjectStore('avatars', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+  });
+};
 
 const App: React.FC = () => {
-  const resetStorage = useStorageReset();
-
-  // Register service worker for PWA support
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(registration => {
-            console.log('SW registered:', registration);
-          })
-          .catch(error => {
-            console.log('SW registration failed:', error);
-          });
-      });
-    }
-  }, []);
-
-  // PIN Authentication
-  const [pin, setPin] = useLocalStorage<string>('chore-champ-pin', DEFAULT_PIN);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [choreId, setChoreId] = useState<number | null>(null);
+  const [rewardId, setRewardId] = useState<number | null>(null);
+  const [requestId, setRequestId] = useState<number | null>(null);
+  const [notificationId, setNotificationId] = useState<number | null>(null);
+  const [pin, setPin] = useState<string>('');
   const [enteredPin, setEnteredPin] = useState<string>('');
-  const [isPinLocked, setIsPinLocked] = useState<boolean>(false);
-  const [showPinModal, setShowPinModal] = useState<boolean>(false);
-  const [showChangePinModal, setShowChangePinModal] = useState<boolean>(false);
-  const [newPin, setNewPin] = useState<string>('');
-  const [confirmNewPin, setConfirmNewPin] = useState<string>('');
+  const [isPinLocked, setIsPinLocked] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [showAddChoreModal, setShowAddChoreModal] = useState(false);
+  const [showEditChoreModal, setShowEditChoreModal] = useState(false);
+  const [showAddRewardModal, setShowAddRewardModal] = useState(false);
+  const [showAddPointsModal, setShowAddPointsModal] = useState(false);
+  const [showAddRequestModal, setShowAddRequestModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [choreToEdit, setChoreToEdit] = useState<Chore | null>(null);
+  const [modalContent, setModalContent] = useState<'addChore' | 'editChore' | 'addReward' | 'addPoints' | 'addRequest' | 'profile'>('addChore');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isNotificationsPanelOpen, setIsNotificationsPanelOpen] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('system');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isInstallPromptOpen, setIsInstallPromptOpen] = useState(false);
+  const [db, setDb] = useState<IDbDatabase | null>(null);
+  const [isDbInitialized, setIsDbInitialized] = useState(false);
+  const [showFamilySelection, setShowFamilySelection] = useState(false);
+  const [showChildManagement, setShowChildManagement] = useState(false);
+  const [showAvatarSelection, setShowAvatarSelection] = useState(false);
+  const [showThemeSelection, setShowThemeSelection] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
-  // Initialize users with PIN check
-  const [users, setUsers] = useLocalStorage<User[]>('chore-champ-users', [
-    { id: 1, name: 'Parent', role: 'parent', avatar: null, points: 0 },
-    { id: 2, name: 'Alex', role: 'child', avatar: 'bot', points: 100 },
-  ]);
+  const [newChoreName, setNewChoreName] = useState('');
+  const [newChorePoints, setNewChorePoints] = useState('10');
+  const [newChoreRequiresApproval, setNewChoreRequiresApproval] = useState(false);
+  const [newChoreRecurrence, setNewChoreRecurrence] = useState<ChoreRecurrence>('NONE');
+  const [newChoreDescription, setNewChoreDescription] = useState('');
+  const [newChoreAssignedTo, setNewChoreAssignedTo] = useState('unassigned');
+  const [editingChore, setEditingChore] = useState<Chore | null>(null);
+  const [newRewardName, setNewRewardName] = useState('');
+  const [newRewardPoints, setNewRewardPoints] = useState('100');
+  const [manualPoints, setManualPoints] = useState('');
+  const [manualPointsUser, setManualPointsUser] = useState('');
+  const [manualRequestDescription, setManualRequestDescription] = useState('');
+  const [manualRequestPoints, setManualRequestPoints] = useState('');
+  const [manualRequestUser, setManualRequestUser] = useState('');
+  const [currentAvatar, setCurrentAvatar] = useState<string | null>(null);
+  const [newAvatar, setNewAvatar] = useState<string>('boy-robot');
+  const [newTheme, setNewTheme] = useState<ThemeMode>('system');
+  const [users, setUsers] = useState<User[]>([]);
+  const [choreList, setChoreList] = useState<Chore[]>([]);
+  const [rewardList, setRewardList] = useState<Reward[]>([]);
+  const [requestList, setRequestList] = useState<PointRequest[]>([]);
 
-  const [currentUserId, setCurrentUserId] = useLocalStorage<number | null>('chore-champ-currentUser', null);
-
-  // Check if we need to set initial user after users are loaded
   useEffect(() => {
-    if (users.length > 0 && !currentUserId) {
-      // No current user set, default to parent
-      const parentUser = users.find(u => u.role === 'parent');
-      if (parentUser) {
-        setCurrentUserId(parentUser.id);
+    const initApp = async () => {
+      try {
+        const localDb = await createLocalDatabase();
+        setDb(localDb);
+        setIsDbInitialized(true);
+        
+        // Load sample data for testing
+        const sampleUsers: User[] = [
+          { id: 1, name: 'Mom', role: 'parent', avatarId: 'girl-robot', points: 500, theme: 'system' },
+          { id: 2, name: 'Dad', role: 'parent', avatarId: 'boy-robot', points: 450, theme: 'system' },
+          { id: 3, name: 'Alex', role: 'child', avatarId: 'boy-robot', points: 200, theme: 'system' },
+          { id: 4, name: 'Sam', role: 'child', avatarId: 'girl-robot', points: 150, theme: 'system' },
+        ];
+        setUsers(sampleUsers);
+        
+        const sampleChores: Chore[] = [
+          { id: 1, name: 'Feed the pets', points: 10, status: ChoreStatus.Incomplete, requiresApproval: true, recurrence: 'DAILY', description: 'Feed the dog and cat', assignedTo: 3 },
+          { id: 2, name: 'Take out trash', points: 15, status: ChoreStatus.Incomplete, requiresApproval: false, recurrence: 'WEEKLY', description: 'Take out kitchen trash', assignedTo: 4 },
+          { id: 3, name: 'Make bed', points: 5, status: ChoreStatus.Incomplete, requiresApproval: false, recurrence: 'DAILY', description: 'Make your bed each morning', assignedTo: 3 },
+          { id: 4, name: 'Clean room', points: 20, status: ChoreStatus.Incomplete, requiresApproval: true, recurrence: 'WEEKLY', description: 'Clean and organize your room', assignedTo: 4 },
+        ];
+        setChoreList(sampleChores);
+        
+        const sampleRewards: Reward[] = [
+          { id: 1, name: 'Extra Screen Time', points: 100 },
+          { id: 2, name: 'Choose Dinner', points: 50 },
+          { id: 3, name: 'Sleepover', points: 200 },
+          { id: 4, name: 'Toy Store Visit', points: 150 },
+        ];
+        setRewardList(sampleRewards);
+        
+        console.log('App initialized with sample data');
+      } catch (error) {
+        console.error('Failed to initialize app:', error);
       }
-    }
-  }, [users, currentUserId, setCurrentUserId]);
+    };
+    initApp();
+  }, []);
 
   const validatePin = (entered: string): boolean => {
     return entered === pin;
   };
 
-  const handlePinLogin = () => {
-    if (validatePin(enteredPin)) {
-      // PIN is correct, allow access
-      setIsPinLocked(false);
-      setEnteredPin('');
-      setShowPinModal(false);
+  const handleToggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullScreen(true);
+      }).catch(console.error);
     } else {
-      // PIN is incorrect
-      setIsPinLocked(true);
-      setEnteredPin('');
-      // Show error notification
-      const newNotification: Notification = {
-        id: Date.now(),
-        targetRole: 'parent',
-        message: 'Incorrect PIN. Please try again.',
-        timestamp: Date.now(),
-        read: false,
-      };
-      setNotifications(prev => [newNotification, ...prev]);
+      document.exitFullscreen().then(() => {
+        setIsFullScreen(false);
+      }).catch(console.error);
     }
   };
 
-  const handleChangePin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPin.length >= 4 && newPin.length <= 6 && newPin === confirmNewPin) {
-      setPin(newPin);
-      setNewPin('');
-      setConfirmNewPin('');
-      setShowChangePinModal(false);
-    } else {
-      alert('PIN must be 4-6 digits and match. Please try again.');
-    }
+  const handleCloseNotifications = () => {
+    setIsNotificationsOpen(false);
   };
 
-  const handleLogout = () => {
-    setCurrentUserId(null);
-    setIsPinLocked(true);
-    setEnteredPin('');
-    setShowPinModal(true);
+  const handleToggleNotifications = () => {
+    setIsNotificationsOpen(!isNotificationsOpen);
   };
 
-  const [chores, setChores] = useLocalStorage<Chore[]>('chore-champ-chores', []);
-  const [rewards, setRewards] = useLocalStorage<Reward[]>('chore-champ-rewards', []);
-  const [pointRequests, setPointRequests] = useLocalStorage<PointRequest[]>('chore-champ-requests', []);
-  const [notifications, setNotifications] = useLocalStorage<Notification[]>('chore-champ-notifications', []);
-
-  const [activeView, setActiveView] = useState<View>(View.Chores);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalContent, setModalContent] = useState<'addChore' | 'editChore' | 'addReward' | 'addPoints' | 'requestPoints' | 'addUser' | 'editUser' | null>(null);
-
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-
-  // Form State
-  const [editingChore, setEditingChore] = useState<Chore | null>(null);
-  const [newChoreName, setNewChoreName] = useState('');
-  const [newChorePoints, setNewChorePoints] = useState('');
-  const [newChoreDescription, setNewChoreDescription] = useState('');
-  const [newChoreAssignedTo, setNewChoreAssignedTo] = useState<string>('unassigned');
-  const [newChoreRequiresApproval, setNewChoreRequiresApproval] = useState(false);
-  const [newChoreRecurrence, setNewChoreRecurrence] = useState<ChoreRecurrence>(ChoreRecurrence.None);
-  const [newRewardName, setNewRewardName] = useState('');
-  const [newRewardPoints, setNewRewardPoints] = useState('');
-  const [manualPoints, setManualPoints] = useState('');
-  const [manualPointsUser, setManualPointsUser] = useState<string>('');
-  const [requestPoints, setRequestPoints] = useState('');
-  const [requestDescription, setRequestDescription] = useState('');
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState<UserRole>('child');
-
-
-  const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId]);
-  const childUsers = useMemo(() => users.filter(u => u.role === 'child'), [users]);
-  const parentUsers = useMemo(() => users.filter(u => u.role === 'parent'), [users]);
-
-  const addNotification = useCallback((targetRole: UserRole, message: string) => {
-    const newNotification: Notification = {
-      id: Date.now(),
-      targetRole,
-      message,
-      timestamp: Date.now(),
-      read: false,
-    };
-    setNotifications(prev => [newNotification, ...prev]);
-  }, [setNotifications]);
-
-  // PIN modal component
-  const PinModal = () => {
-    if (!showPinModal || !isPinLocked) return null;
-
-    return (
-      <Modal isOpen={showPinModal} onClose={() => setShowPinModal(false)}>
-        <h2 className="text-2xl font-bold mb-4 text-slate-700 flex items-center gap-2">
-          <LockIcon className="w-6 h-6" />
-          Parent PIN Required
-        </h2>
-        <p className="text-slate-600 mb-4">Please enter the parent PIN to continue.</p>
-        <div className="flex gap-2 mb-6">
-          {[...Array(6)].map((_, i) => (
-            <input
-              key={i}
-              type="password"
-              maxLength={1}
-              value={enteredPin[i] || ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (/^\d*$/.test(value) && value.length <= 6) {
-                  setEnteredPin(prev => prev + value);
-                }
-              }}
-              className="w-12 h-12 text-center text-xl font-bold border-2 border-slate-300 rounded-lg focus:border-sky-500 focus:outline-none"
-            />
-          ))}
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowPinModal(false)}
-            className="flex-1 bg-slate-200 text-slate-700 font-semibold py-3 px-4 rounded-lg hover:bg-slate-300 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handlePinLogin}
-            className="flex-1 bg-sky-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-sky-600 transition-colors"
-          >
-            Login
-          </button>
-          <button
-            onClick={() => setShowChangePinModal(true)}
-            className="flex-1 bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-600 transition-colors"
-          >
-            Change PIN
-          </button>
-        </div>
-      </Modal>
-    );
+  const handleOpenSettings = () => {
+    setIsSettingsOpen(true);
   };
 
-  // Change PIN modal component
-  const ChangePinModal = () => {
-    if (!showChangePinModal) return null;
-
-    return (
-      <Modal isOpen={showChangePinModal} onClose={() => setShowChangePinModal(false)}>
-        <h2 className="text-2xl font-bold mb-4 text-slate-700 flex items-center gap-2">
-          <LockIcon className="w-6 h-6" />
-          Change PIN
-        </h2>
-        <p className="text-slate-600 mb-4">Enter a new 4-6 digit PIN.</p>
-        <form onSubmit={handleChangePin} className="space-y-4">
-          <input
-            type="password"
-            maxLength={6}
-            value={newPin}
-            onChange={(e) => setNewPin(e.target.value)}
-            placeholder="New PIN"
-            className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 text-center text-xl font-bold tracking-widest"
-            required
-          />
-          <input
-            type="password"
-            maxLength={6}
-            value={confirmNewPin}
-            onChange={(e) => setConfirmNewPin(e.target.value)}
-            placeholder="Confirm New PIN"
-            className="w-full p-3 border rounded-md bg-slate-50 text-slate-800 text-center text-xl font-bold tracking-widest"
-            required
-          />
-          <button type="submit" className="w-full bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-600 transition-colors">
-            Update PIN
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowChangePinModal(false)}
-            className="w-full bg-slate-200 text-slate-700 font-semibold py-3 px-4 rounded-lg hover:bg-slate-300 transition-colors"
-          >
-            Cancel
-          </button>
-        </form>
-      </Modal>
-    );
+  const handleCloseSettings = () => {
+    setIsSettingsOpen(false);
   };
 
-  const handleUserChange = (userId: number) => {
-    const selectedUser = users.find(u => u.id === userId);
-    if (selectedUser?.role === 'parent') {
-      // Parent users need PIN authentication
-      setIsPinLocked(true);
-      setEnteredPin('');
-      setShowPinModal(true);
-    } else {
-      // Non-parent users don't need PIN
-      setIsPinLocked(false);
-    }
-    setCurrentUserId(userId);
-    setIsNotificationsOpen(false); // Close notifications on user switch
-    if (selectedUser?.role === 'child' && activeView === View.Requests) {
-      setActiveView(View.Chores);
-    }
+  const handleInstallPrompt = () => {
+    setIsInstallPromptOpen(true);
   };
 
-  const handleSaveAvatar = (newAvatar: string) => {
-    setUsers(prev => prev.map(u => u.id === currentUserId && u.role === 'child' ? { ...u, avatar: newAvatar } : u));
-    setIsProfileModalOpen(false);
+  const handleCloseInstallPrompt = () => {
+    setIsInstallPromptOpen(false);
   };
 
-  const handleChoreStateChange = useCallback((choreId: number, newStatus: ChoreStatus) => {
-    const chore = chores.find(c => c.id === choreId);
-    if (!chore) return;
-
-    let updatedChore = { ...chore, status: newStatus };
-
-    if (newStatus === ChoreStatus.Completed && chore.status !== ChoreStatus.Completed) {
-      const childId = chore.assignedTo || currentUser.id;
-      const child = users.find(u => u.id === childId);
-
-      if(child && child.role === 'child') {
-          setUsers(prev => prev.map(u => u.id === child.id ? {...u, points: u.points + chore.points} : u));
-           if (chore.status === ChoreStatus.PendingApproval) {
-            addNotification('child', `Your chore "${chore.name}" was approved! You earned ${chore.points} points.`);
-          }
-      }
-
-      // Streak logic
-      if (chore.recurrence === ChoreRecurrence.Daily || chore.recurrence === ChoreRecurrence.Weekly) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        let newStreak = chore.streak || 0;
-        const lastCompleted = chore.lastCompletedDate ? new Date(chore.lastCompletedDate) : null;
-        if (lastCompleted) {
-          lastCompleted.setHours(0, 0, 0, 0);
-        }
-
-        if (chore.recurrence === ChoreRecurrence.Daily) {
-          if (lastCompleted) {
-            const yesterday = new Date(today);
-            yesterday.setDate(today.getDate() - 1);
-            if (lastCompleted.getTime() === yesterday.getTime()) {
-              newStreak++; // Continued streak
-            } else if (lastCompleted.getTime() < yesterday.getTime()) {
-              newStreak = 1; // Broken streak, starting new one
-            }
-            // If lastCompleted.getTime() === today.getTime(), streak is unchanged.
-          } else {
-            newStreak = 1; // First ever completion
-          }
-        } else if (chore.recurrence === ChoreRecurrence.Weekly) {
-          if (lastCompleted) {
-            const sevenDaysAgo = new Date(today);
-            sevenDaysAgo.setDate(today.getDate() - 7);
-            if (lastCompleted.getTime() >= sevenDaysAgo.getTime()) {
-              newStreak++; // Continued within the week
-            } else {
-              newStreak = 1; // Broken streak
-            }
-          } else {
-            newStreak = 1; // First ever completion
-          }
-        }
-        updatedChore.streak = newStreak;
-        updatedChore.lastCompletedDate = new Date().toISOString();
-      }
-    }
-    
-    if (newStatus === ChoreStatus.PendingApproval) {
-        addNotification('parent', `A chore requires your approval: "${chore.name}".`);
-    }
-
-    if (newStatus === ChoreStatus.Incomplete && chore.status === ChoreStatus.PendingApproval) {
-        addNotification('child', `Your chore "${chore.name}" was denied. Please try again.`);
-    }
-
-    setChores(prev => prev.map(c => c.id === choreId ? updatedChore : c));
-  }, [chores, setChores, addNotification, users, setUsers]);
-
-  const handleChoreOverride = useCallback((choreId: number) => {
-    const chore = chores.find(c => c.id === choreId);
-    if (!chore || chore.status === ChoreStatus.Completed) return;
-
-    let updatedChore = { ...chore, status: ChoreStatus.Completed };
-
-    const childId = chore.assignedTo;
-    if (childId) {
-        const child = users.find(u => u.id === childId);
-        if (child) {
-            setUsers(prev => prev.map(u => u.id === child.id ? {...u, points: u.points + chore.points} : u));
-            addNotification('child', `Your parent manually completed "${chore.name}" for you. You earned ${chore.points} points.`);
-        }
-    }
-
-    // Streak logic
-    if (chore.recurrence === ChoreRecurrence.Daily || chore.recurrence === ChoreRecurrence.Weekly) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        let newStreak = chore.streak || 0;
-        const lastCompleted = chore.lastCompletedDate ? new Date(chore.lastCompletedDate) : null;
-        if (lastCompleted) {
-          lastCompleted.setHours(0, 0, 0, 0);
-        }
-
-        if (chore.recurrence === ChoreRecurrence.Daily) {
-          if (lastCompleted) {
-            const yesterday = new Date(today);
-            yesterday.setDate(today.getDate() - 1);
-            if (lastCompleted.getTime() === yesterday.getTime()) {
-              newStreak++;
-            } else if (lastCompleted.getTime() < yesterday.getTime()) {
-              newStreak = 1;
-            }
-          } else {
-            newStreak = 1;
-          }
-        } else if (chore.recurrence === ChoreRecurrence.Weekly) {
-          if (lastCompleted) {
-            const sevenDaysAgo = new Date(today);
-            sevenDaysAgo.setDate(today.getDate() - 7);
-            if (lastCompleted.getTime() >= sevenDaysAgo.getTime()) {
-              newStreak++;
-            } else {
-              newStreak = 1;
-            }
-          } else {
-            newStreak = 1;
-          }
-        }
-        updatedChore.streak = newStreak;
-        updatedChore.lastCompletedDate = new Date().toISOString();
-    }
-
-    setChores(prev => prev.map(c => c.id === choreId ? updatedChore : c));
-    addNotification('parent', `You manually completed the chore "${chore.name}".`);
-  }, [chores, setChores, addNotification, users, setUsers]);
-
-  const handleRedeemReward = useCallback((rewardId: number) => {
-    const reward = rewards.find(r => r.id === rewardId);
-    if (reward && currentUser?.role === 'child' && currentUser?.points >= reward.points) {
-      setUsers(prev => prev.map(u => u.id === currentUser?.id ? {...u, points: u.points - reward.points} : u));
-      alert(`You've redeemed "${reward.name}"!`);
-    }
-  }, [rewards, currentUser, setUsers]);
-
-  const openModal = (content: 'addChore' | 'addReward' | 'addPoints' | 'requestPoints' | 'addUser') => {
-    if (content === 'addPoints') {
-      setManualPointsUser(childUsers[0]?.id.toString() || '');
-    }
-    setIsModalOpen(true);
-    setModalContent(content);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setModalContent(null);
-    setEditingChore(null);
+  const handleOpenAddChore = () => {
     setNewChoreName('');
-    setNewChorePoints('');
+    setNewChorePoints('10');
+    setNewChoreRequiresApproval(false);
+    setNewChoreRecurrence('NONE');
     setNewChoreDescription('');
     setNewChoreAssignedTo('unassigned');
-    setNewChoreRequiresApproval(false);
-    setNewChoreRecurrence(ChoreRecurrence.None);
-    setNewRewardName('');
-    setNewRewardPoints('');
-    setManualPoints('');
-    setManualPointsUser('');
-    setRequestPoints('');
-    setRequestDescription('');
-    setEditingUser(null);
-    setNewUserName('');
-    setNewUserRole('child');
+    setShowAddChoreModal(true);
+  };
+
+  const handleCloseAddChore = () => {
+    setShowAddChoreModal(false);
   };
 
   const handleAddChore = (e: React.FormEvent) => {
     e.preventDefault();
     const newChore: Chore = {
-      id: Date.now(),
+      id: Date.now() as unknown as number,
       name: newChoreName,
       points: parseInt(newChorePoints, 10),
       status: ChoreStatus.Incomplete,
@@ -450,7 +214,7 @@ const App: React.FC = () => {
       description: newChoreDescription,
       assignedTo: newChoreAssignedTo === 'unassigned' ? undefined : parseInt(newChoreAssignedTo, 10),
     };
-    setChores(prev => [...prev, newChore]);
+    setChoreList(prev => [...prev, newChore]);
     closeModal();
   };
 
@@ -471,29 +235,48 @@ const App: React.FC = () => {
     if (!editingChore) return;
 
     const updatedChore: Chore = {
-        ...editingChore,
-        name: newChoreName,
-        points: parseInt(newChorePoints, 10),
-        description: newChoreDescription,
-        assignedTo: newChoreAssignedTo === 'unassigned' ? undefined : parseInt(newChoreAssignedTo, 10),
-        requiresApproval: newChoreRequiresApproval,
-        recurrence: newChoreRecurrence,
+      ...editingChore,
+      name: newChoreName,
+      points: parseInt(newChorePoints, 10),
+      description: newChoreDescription,
+      assignedTo: newChoreAssignedTo === 'unassigned' ? undefined : parseInt(newChoreAssignedTo, 10),
+      requiresApproval: newChoreRequiresApproval,
+      recurrence: newChoreRecurrence,
     };
 
-    setChores(prev => prev.map(c => c.id === editingChore.id ? updatedChore : c));
+    setChoreList(prev => prev.map(c => c.id === editingChore.id ? updatedChore : c));
     closeModal();
   };
 
+  const handleOpenAddReward = () => {
+    setNewRewardName('');
+    setNewRewardPoints('100');
+    setShowAddRewardModal(true);
+  };
+
+  const handleCloseAddReward = () => {
+    setShowAddRewardModal(false);
+  };
 
   const handleAddReward = (e: React.FormEvent) => {
     e.preventDefault();
     const newReward: Reward = {
-      id: Date.now(),
+      id: Date.now() as unknown as number,
       name: newRewardName,
       points: parseInt(newRewardPoints, 10),
     };
-    setRewards(prev => [...prev, newReward]);
+    setRewardList(prev => [...prev, newReward]);
     closeModal();
+  };
+
+  const handleOpenAddPoints = () => {
+    setManualPoints('');
+    setManualPointsUser('');
+    setShowAddPointsModal(true);
+  };
+
+  const handleCloseAddPoints = () => {
+    setShowAddPointsModal(false);
   };
 
   const handleAddPoints = (e: React.FormEvent) => {
@@ -501,442 +284,628 @@ const App: React.FC = () => {
     const pointsToAdd = parseInt(manualPoints, 10);
     const targetUserId = parseInt(manualPointsUser, 10);
     if (!isNaN(pointsToAdd) && !isNaN(targetUserId)) {
-      setUsers(prev => prev.map(u => u.id === targetUserId ? { ...u, points: u.points + pointsToAdd } : u));
+      setUsers(prev => prev.map(u => u.id === targetUserId.toString() ? { ...u, points: u.points + pointsToAdd } : u));
       closeModal();
     }
   };
 
-  const handleRequestPoints = (e: React.FormEvent) => {
+  const handleOpenAddRequest = () => {
+    setManualRequestDescription('');
+    setManualRequestPoints('');
+    setManualRequestUser('');
+    setShowAddRequestModal(true);
+  };
+
+  const handleCloseAddRequest = () => {
+    setShowAddRequestModal(false);
+  };
+
+  const handleAddRequest = (e: React.FormEvent) => {
     e.preventDefault();
     const newRequest: PointRequest = {
-      id: Date.now(),
-      userId: currentUser.id,
-      description: requestDescription,
-      points: parseInt(requestPoints, 10),
+      id: Date.now() as unknown as number,
+      userId: parseInt(manualRequestUser, 10),
+      description: manualRequestDescription,
+      points: parseInt(manualRequestPoints, 10),
       status: PointRequestStatus.Pending,
     };
-    setPointRequests(prev => [...prev, newRequest]);
-    addNotification('parent', `${currentUser.name} sent a new point request.`);
+    setRequestList(prev => [...prev, newRequest]);
     closeModal();
-    alert("Your request has been sent to your parent for approval!");
   };
 
-  const handlePointRequest = (requestId: number, newStatus: PointRequestStatus.Approved | PointRequestStatus.Denied) => {
-    const request = pointRequests.find(r => r.id === requestId);
-    if (!request) return;
+  const handleOpenProfileModal = () => {
+    setCurrentAvatar(currentUser?.avatarId || null);
+    setNewAvatar(currentUser?.avatarId || 'boy-robot');
+    setShowProfileModal(true);
+  };
 
-    if (newStatus === PointRequestStatus.Approved) {
-      setUsers(prev => prev.map(u => u.id === request.userId ? { ...u, points: u.points + request.points} : u));
-      addNotification('child', `Your request for "${request.description}" was approved! You earned ${request.points} points.`);
-    } else {
-      addNotification('child', `Your request for "${request.description}" was denied.`);
-    }
-    setPointRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: newStatus } : r));
+  const handleCloseProfileModal = () => {
+    setShowProfileModal(false);
   };
-  
-  const handleOpenEditUserModal = (userToEdit: User) => {
-    setEditingUser(userToEdit);
-    setNewUserName(userToEdit.name);
-    setNewUserRole(userToEdit.role);
-    setModalContent('editUser');
-    setIsModalOpen(true);
-  };
-  
-  const handleAddUser = (e: React.FormEvent) => {
-      e.preventDefault();
-      const newUser: User = {
-          id: Date.now(),
-          name: newUserName,
-          role: newUserRole,
-          avatar: newUserRole === 'child' ? 'bot' : null,
-          points: 0,
+
+  const handleSaveAvatar = (avatarId: string) => {
+    if (currentUser) {
+      const updatedUser: User = {
+        ...currentUser,
+        avatarId: avatarId,
       };
-      setUsers(prev => [...prev, newUser]);
-      closeModal();
-  };
-
-  const handleEditUser = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!editingUser) return;
-
-      setUsers(prev => prev.map(u => {
-          if (u.id === editingUser.id) {
-              const wasChild = editingUser.role === 'child';
-              const isNowParent = newUserRole === 'parent';
-              
-              if (wasChild && isNowParent) {
-                  setChores(chores => chores.map(c => c.assignedTo === u.id ? { ...c, assignedTo: undefined } : c));
-              }
-
-              return {
-                  ...u,
-                  name: newUserName,
-                  role: newUserRole,
-                  points: u.role !== newUserRole ? 0 : u.points,
-                  avatar: isNowParent ? null : (u.avatar || 'bot'),
-              };
-          }
-          return u;
-      }));
-      
-      closeModal();
-  };
-
-  const handleDeleteUser = (userId: number) => {
-      const userToDelete = users.find(u => u.id === userId);
-      if (!userToDelete) return;
-
-      if (userId === currentUserId) {
-          alert("You cannot delete the account you are currently using.");
-          return;
+      const userIndex = users.findIndex(u => u.id === currentUser.id);
+      if (userIndex !== -1) {
+        users[userIndex] = updatedUser;
+        setUsers([...users]);
       }
-
-      if (userToDelete.role === 'parent' && parentUsers?.length <= 1) {
-          alert("You cannot delete the last parent account.");
-          return;
-      }
-
-      if (window.confirm(`Are you sure you want to delete ${userToDelete.name}? This will also remove their assigned chores and cannot be undone.`)) {
-          if (userToDelete.role === 'child') {
-              setChores(prev => prev.map(c => c.assignedTo === userId ? { ...c, assignedTo: undefined } : c));
-              setPointRequests(prev => prev.filter(r => r.userId !== userId));
-          }
-          
-          setUsers(prev => prev.filter(u => u.id !== userId));
-      }
-  };
-
-  const resetDailyChores = () => {
-    if (window.confirm("Are you sure you want to reset all daily chores?")) {
-      setChores(prev => prev.map(c => {
-        if (c.recurrence === ChoreRecurrence.Daily) {
-          // If chore was not completed, reset streak to 0.
-          const newStreak = c.status === ChoreStatus.Incomplete ? 0 : c.streak;
-          return { ...c, status: ChoreStatus.Incomplete, streak: newStreak };
-        }
-        return c;
-      }));
     }
   };
 
-  const handleToggleNotifications = () => {
-    setIsNotificationsOpen(prev => !prev);
-    if (!isNotificationsOpen) {
-      setNotifications(prev => prev.map(n => n.targetRole === currentUser?.role ? { ...n, read: true } : n));
-    }
+  const handleOpenChildManagement = () => {
+    setShowChildManagement(true);
+  };
+
+  const handleCloseChildManagement = () => {
+    setShowChildManagement(false);
+  };
+
+  const handleOpenAvatarSelection = () => {
+    setShowAvatarSelection(true);
+  };
+
+  const handleCloseAvatarSelection = () => {
+    setShowAvatarSelection(false);
+  };
+
+  const handleOpenThemeSelection = () => {
+    setShowThemeSelection(true);
+  };
+
+  const handleCloseThemeSelection = () => {
+    setShowThemeSelection(false);
+  };
+
+  const handleSaveTheme = (themeMode: ThemeMode) => {
+    setThemeMode(themeMode);
+    localStorage.setItem('chore-champ-theme', themeMode);
+    handleCloseThemeSelection();
+  };
+
+  const handleThemeModeChange = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    localStorage.setItem('chore-champ-theme', mode);
+  };
+
+  const closeModal = () => {
+    setShowAddChoreModal(false);
+    setShowEditChoreModal(false);
+    setShowAddRewardModal(false);
+    setShowAddPointsModal(false);
+    setShowAddRequestModal(false);
+    setShowProfileModal(false);
   };
 
   const handleClearNotifications = () => {
-      setNotifications(prev => prev.filter(n => n.targetRole !== currentUser?.role));
+    setNotifications([]);
+    setUnreadNotificationsCount(0);
   };
 
-  const sortedChores = useMemo(() => {
-    const statusOrder = {
-      [ChoreStatus.Incomplete]: 1,
-      [ChoreStatus.PendingApproval]: 2,
-      [ChoreStatus.Completed]: 3,
+  const handleMarkRead = (notificationId: string) => {
+    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read: true } : n));
+  };
+
+  const handleDeleteNotification = (notificationId: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+  };
+
+  useEffect(() => {
+    if (db && isDbInitialized) {
+      const loadData = async () => {
+        try {
+          const users = await db.transaction(['users'], 'readonly').objectStore('users').getAll();
+          setUsers(users);
+          const chores = await db.transaction(['chores'], 'readonly').objectStore('chores').getAll();
+          setChoreList(chores);
+          const rewards = await db.transaction(['rewards'], 'readonly').objectStore('rewards').getAll();
+          setRewardList(rewards);
+          const pointRequests = await db.transaction(['pointRequests'], 'readonly').objectStore('pointRequests').getAll();
+          setRequestList(pointRequests);
+          const notifications = await db.transaction(['notifications'], 'readonly').objectStore('notifications').getAll();
+          setNotifications(notifications);
+        } catch (error) {
+          console.error('Failed to load data:', error);
+        }
+      };
+      loadData();
+    }
+  }, [db, isDbInitialized]);
+
+  // Initialize theme
+  useEffect(() => {
+    const initTheme = async () => {
+      const theme = getThemeMode();
+      setThemeMode(theme);
+      await initializeTheme(theme);
     };
-     const userChores = currentUser?.role === 'parent'
-      ? chores
-      : chores.filter(c => c.assignedTo === currentUser?.id || !c.assignedTo);
-
-    return [...userChores].sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
-  }, [chores, currentUser]);
-
-  const pendingRequestsCount = useMemo(() => {
-    return pointRequests.filter(r => r.status === PointRequestStatus.Pending).length;
-  }, [pointRequests]);
-
-  const unreadNotificationsCount = useMemo(() => {
-    return notifications.filter(n => n.targetRole === currentUser?.role && !n.read).length;
-  }, [notifications, currentUser]);
-  
-  const currentUserNotifications = useMemo(() => {
-    return notifications.filter(n => n.targetRole === currentUser?.role);
-  }, [notifications, currentUser]);
-
-  if (!currentUser) {
-    return <div>Loading...</div>; // Or a better loading state
-  }
+    initTheme();
+  }, []);
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header
-        points={currentUser?.points || 0}
-        currentUser={currentUser}
-        allUsers={users}
-        onUserChange={handleUserChange}
-        onEditProfile={() => setIsProfileModalOpen(true)}
-        onLogout={handleLogout}
-        onResetData={() => {
-          if (window.confirm('Are you sure you want to wipe all data? This cannot be undone!')) {
-            resetStorage();
-            window.location.reload();
-          }
-        }}
-        unreadNotificationsCount={unreadNotificationsCount}
-        onToggleNotifications={handleToggleNotifications}
-        isNotificationsOpen={isNotificationsOpen}
-        notifications={currentUserNotifications}
-        onClearNotifications={handleClearNotifications}
-      />
-      <main className="flex-grow container mx-auto p-4 pb-28">
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6">
-          <div className="flex justify-center space-x-2 sm:space-x-4">
-            <button onClick={() => setActiveView(View.Chores)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 ${activeView === View.Chores ? 'bg-sky-500 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
-              <StarIcon className="w-5 h-5" />
-              <span>Chores</span>
-            </button>
-            <button onClick={() => setActiveView(View.Rewards)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 ${activeView === View.Rewards ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
-              <GiftIcon className="w-5 h-5" />
-              <span>Rewards</span>
-            </button>
-            {currentUser.role === 'parent' && (
-              <>
-                <button onClick={() => setActiveView(View.Requests)} className={`relative flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 ${activeView === View.Requests ? 'bg-rose-500 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
-                  <InboxArrowDownIcon className="w-5 h-5" />
-                  <span>Requests</span>
-                  {pendingRequestsCount > 0 && <span className="absolute -top-2 -right-2 bg-rose-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">{pendingRequestsCount}</span>}
-                </button>
-                <button onClick={() => setActiveView(View.Users)} className={`flex-1 transition-all duration-300 ease-in-out text-sm sm:text-base font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 ${activeView === View.Users ? 'bg-indigo-500 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
-                  <UsersIcon className="w-5 h-5" />
-                  <span>Family</span>
-                </button>
-              </>
+    <ThemeProvider themeMode={themeMode}>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+        <header className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold">Chore Champ</h1>
+            {currentUser && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  {currentUser.name}
+                </span>
+              </div>
             )}
           </div>
-        </div>
 
-        <div>
-          {activeView === View.Chores && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sortedChores.map(chore => (
-                <ChoreCard key={chore.id} chore={chore} onStateChange={handleChoreStateChange} currentUser={currentUser} onEdit={handleOpenEditModal} onOverride={handleChoreOverride} />
-              ))}
-            </div>
-          )}
-          {activeView === View.Rewards && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {rewards.map(reward => (
-                <RewardCard key={reward.id} reward={reward} userPoints={currentUser.points} onRedeem={handleRedeemReward} />
-              ))}
-            </div>
-          )}
-          {activeView === View.Requests && currentUser?.role === 'parent' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pointRequests.map(req => {
-                const requestingUser = users.find(u => u.id === req.userId);
-                return <PointRequestCard key={req.id} request={req} onAction={handlePointRequest} userName={requestingUser?.name} />;
-              })}
-            </div>
-          )}
-          {activeView === View.Users && currentUser?.role === 'parent' && (
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl font-bold">Manage Family</h2>
-                  <button onClick={() => openModal('addUser')} className="bg-sky-500 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-sky-600 flex items-center justify-center space-x-2">
-                      <PlusIcon className="w-5 h-5" />
-                      <span>Add Member</span>
-                  </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {users.map(user => (
-                      <div key={user.id} className="bg-white p-4 rounded-xl shadow-md flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                              <AvatarDisplay avatar={user.avatar} sizeClass="w-12 h-12" />
-                              <div>
-                                  <p className="font-bold text-lg">{user.name}</p>
-                                  <p className="text-sm text-slate-500 capitalize">{user.role}</p>
-                              </div>
-                          </div>
-                          <div className="flex space-x-2">
-                              <button onClick={() => handleOpenEditUserModal(user)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-100 rounded-full transition-colors" aria-label={`Edit ${user.name}`}>
-                                  <PencilIcon className="w-5 h-5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteUser(user.id)}
-                                disabled={user.id === currentUserId || (user.role === 'parent' && parentUsers.length <= 1)}
-                                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                aria-label={`Delete ${user.name}`}
-                              >
-                                  <TrashIcon className="w-5 h-5" />
-                              </button>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleToggleFullScreen}
+              className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+              title="Toggle Full Screen"
+            >
+              ⚡
+            </button>
 
-      {currentUser?.role === 'parent' && (
-        <div className="fixed bottom-24 right-4 z-50">
-          <button onClick={() => openModal('addPoints')} className="bg-purple-600 text-white rounded-full p-4 shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:ring-offset-2 focus:ring-offset-sky-50 transition-transform transform hover:scale-110" aria-label="Assign points">
-            <CogIcon className="w-8 h-8" />
-          </button>
-        </div>
-      )}
-      {currentUser?.role === 'child' && (
-        <div className="fixed bottom-24 right-4 z-50">
-          <button onClick={() => openModal('requestPoints')} className="bg-fuchsia-600 text-white rounded-full p-4 shadow-lg hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-600 focus:ring-offset-2 focus:ring-offset-sky-50 transition-transform transform hover:scale-110" aria-label="Request points">
-            <PlusIcon className="w-8 h-8" />
-          </button>
-        </div>
-      )}
+            <button
+              onClick={handleToggleNotifications}
+              className="relative p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+              title="Notifications"
+            >
+              🔔
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                  {unreadNotificationsCount}
+                </span>
+              )}
+            </button>
 
-      {currentUser?.role === 'parent' && (
-        <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-slate-200 p-2 shadow-t-lg">
-          <div className="container mx-auto flex justify-center items-center space-x-2">
-            <button onClick={() => openModal('addChore')} className="flex-1 text-sm bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-blue-600 flex items-center justify-center space-x-2"><PlusIcon className="w-5 h-5" /><span>Add Chore</span></button>
-            <button onClick={() => openModal('addReward')} className="flex-1 text-sm bg-green-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-green-600 flex items-center justify-center space-x-2"><PlusIcon className="w-5 h-5" /><span>Add Reward</span></button>
-            <button onClick={resetDailyChores} className="flex-1 text-sm bg-amber-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-amber-600">Reset Day</button>
+            <button
+              onClick={handleOpenSettings}
+              className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+              title="Settings"
+            >
+              ⚙️
+            </button>
           </div>
+        </header>
+
+        <main className="container mx-auto px-4 py-6">
+          {/* User List Display */}
+          <div className="mt-4">
+            <h2 className="text-lg font-bold mb-3 text-slate-700 dark:text-slate-200">Family Members</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {users.map(user => (
+                <div key={user.id} className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">{user.role === 'parent' ? '👨‍👩' : '👧‍🧑'}</div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-800 dark:text-slate-100">{user.name}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {user.role === 'parent' ? 'Parent' : 'Child'} • {user.points} points
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Chore List Display */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-slate-700 dark:text-slate-200">Chores</h2>
+              <button
+                onClick={handleOpenAddChore}
+                className="px-3 py-1 bg-indigo-500 text-white text-sm font-semibold rounded-lg hover:bg-indigo-600 transition-colors"
+              >
+                + Add Chore
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {choreList.map(chore => (
+                <div key={chore.id} className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-800 dark:text-slate-100">{chore.name}</p>
+                      <p className="text-sm text-indigo-600 dark:text-indigo-400 font-medium">{chore.points} points</p>
+                      {chore.description && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{chore.description}</p>}
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <span className="text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-2 py-1 rounded">
+                          {chore.recurrence}
+                        </span>
+                        {chore.requiresApproval && (
+                          <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 px-2 py-1 rounded">
+                            Approval Required
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleOpenEditModal(chore)}
+                      className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg ml-2"
+                      title="Edit Chore"
+                    >
+                      ✏️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Rewards List Display */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-slate-700 dark:text-slate-200">Rewards</h2>
+              <button
+                onClick={handleOpenAddReward}
+                className="px-3 py-1 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600 transition-colors"
+              >
+                + Add Reward
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {rewardList.map(reward => (
+                <div key={reward.id} className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg p-4 shadow-sm border-2 border-amber-200 dark:border-amber-800">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-900 dark:text-amber-100">{reward.name}</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">{reward.points} points</p>
+                    </div>
+                    <div className="text-amber-500 text-xl">🎁</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+
+        <footer className="border-t border-slate-200 dark:border-slate-800 p-4 text-center text-sm text-slate-600 dark:text-slate-400">
+          Chore Champ v1.0.0 - Local Development Mode
         </footer>
-      )}
-      
-      {isProfileModalOpen && currentUser?.role === 'child' && (
-        <ProfileModal
-          currentAvatar={currentUser?.avatar}
-          onSave={handleSaveAvatar}
-          onClose={() => setIsProfileModalOpen(false)}
+
+        {/* Modals */}
+        {showAddChoreModal && (
+          <Modal
+            title="Add Chore"
+            onClose={handleCloseAddChore}
+            onSubmit={handleAddChore}
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <input
+                  type="text"
+                  value={newChoreName}
+                  onChange={(e) => setNewChoreName(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Enter chore name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Points</label>
+                <input
+                  type="number"
+                  value={newChorePoints}
+                  onChange={(e) => setNewChorePoints(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Enter points"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="requiresApproval"
+                  checked={newChoreRequiresApproval}
+                  onChange={(e) => setNewChoreRequiresApproval(e.target.checked)}
+                />
+                <label htmlFor="requiresApproval">Requires approval</label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Frequency</label>
+                <select
+                  value={newChoreRecurrence}
+                  onChange={(e) => setNewChoreRecurrence(e.target.value as ChoreRecurrence)}
+                  className="w-full p-2 border rounded-lg"
+                >
+                  <option value="NONE">One-time</option>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Assigned To</label>
+                <select
+                  value={newChoreAssignedTo}
+                  onChange={(e) => setNewChoreAssignedTo(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                >
+                  <option value="unassigned">Anyone</option>
+                  {users.filter(u => u.role === 'child').map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  value={newChoreDescription}
+                  onChange={(e) => setNewChoreDescription(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Enter description (optional)"
+                />
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {showAddRewardModal && (
+          <Modal
+            title="Add Reward"
+            onClose={handleCloseAddReward}
+            onSubmit={handleAddReward}
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <input
+                  type="text"
+                  value={newRewardName}
+                  onChange={(e) => setNewRewardName(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Enter reward name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Points</label>
+                <input
+                  type="number"
+                  value={newRewardPoints}
+                  onChange={(e) => setNewRewardPoints(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Enter points"
+                />
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {showAddPointsModal && (
+          <Modal
+            title="Add Points"
+            onClose={handleCloseAddPoints}
+            onSubmit={handleAddPoints}
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Points</label>
+                <input
+                  type="number"
+                  value={manualPoints}
+                  onChange={(e) => setManualPoints(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Enter points to add"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">User</label>
+                <select
+                  value={manualPointsUser}
+                  onChange={(e) => setManualPointsUser(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                >
+                  {users.filter(u => u.role === 'child').map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {showAddRequestModal && (
+          <Modal
+            title="Add Point Request"
+            onClose={handleCloseAddRequest}
+            onSubmit={handleAddRequest}
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  value={manualRequestDescription}
+                  onChange={(e) => setManualRequestDescription(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Enter description"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Points</label>
+                <input
+                  type="number"
+                  value={manualRequestPoints}
+                  onChange={(e) => setManualRequestPoints(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Enter points"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">User</label>
+                <select
+                  value={manualRequestUser}
+                  onChange={(e) => setManualRequestUser(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                >
+                  {users.filter(u => u.role === 'child').map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {showProfileModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+              <h2 className="text-2xl font-bold mb-4 text-slate-800 dark:text-slate-100">
+                Select Your Avatar
+              </h2>
+              
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">
+                      Current Avatar
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {currentUser?.avatarId || 'boy-robot'}
+                    </p>
+                  </div>
+                  <div className="text-4xl">🤖</div>
+                </div>
+
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">
+                      Selected Avatar
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {newAvatar}
+                    </p>
+                  </div>
+                  <div className="text-4xl">🤖</div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCloseProfileModal}
+                  className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold py-3 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleSaveAvatar(newAvatar);
+                    handleCloseProfileModal();
+                  }}
+                  className="flex-1 bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-600 transition-colors"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isNotificationsOpen && (
+        <NotificationPanel
+          notifications={notifications}
+          onClose={handleCloseNotifications}
         />
       )}
-      
-      <Modal isOpen={isModalOpen} onClose={closeModal}>
-        {modalContent === 'addChore' && (
-          <form onSubmit={handleAddChore}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Add New Chore</h2>
-            <div className="space-y-4">
-              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Chore name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Description (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" rows={3}></textarea>
-              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required min="1" />
-               <div className="flex items-center justify-between">
-                <label htmlFor="assignTo" className="text-slate-600 font-medium">Assign To:</label>
-                <select id="assignTo" value={newChoreAssignedTo} onChange={e => setNewChoreAssignedTo(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                  <option value="unassigned">Anyone</option>
-                  {childUsers.map(child => (
-                    <option key={child.id} value={child.id}>{child.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center justify-between">
-                <label htmlFor="recurrence" className="text-slate-600 font-medium">Frequency:</label>
-                <select id="recurrence" value={newChoreRecurrence} onChange={e => setNewChoreRecurrence(e.target.value as ChoreRecurrence)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                  <option value={ChoreRecurrence.None}>One-time</option>
-                  <option value={ChoreRecurrence.Daily}>Daily</option>
-                  <option value={ChoreRecurrence.Weekly}>Weekly</option>
-                </select>
-              </div>
-              <div className="flex items-center">
-                <input type="checkbox" id="requiresApproval" checked={newChoreRequiresApproval} onChange={e => setNewChoreRequiresApproval(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500" />
-                <label htmlFor="requiresApproval" className="ml-3 block text-sm font-medium text-slate-700">Requires parent approval</label>
-              </div>
-              <button type="submit" className="w-full bg-blue-500 text-white p-3 rounded-md font-bold hover:bg-blue-600 transition-colors">Add Chore</button>
+
+      {/* Install Prompt */}
+      <div className="fixed bottom-4 right-4 z-50">
+        {isInstallPromptOpen && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-4 max-w-sm">
+            <h3 className="font-semibold mb-2 text-slate-800 dark:text-slate-100">Install Chore Champ</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+              Install the app to your home screen for offline access and push notifications.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCloseInstallPrompt}
+                className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              >
+                Not Now
+              </button>
+              <button
+                onClick={() => {
+                  console.log('App installed');
+                  handleCloseInstallPrompt();
+                }}
+                className="flex-1 bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600 transition-colors"
+              >
+                Install
+              </button>
             </div>
-          </form>
+          </div>
         )}
-        {modalContent === 'editChore' && editingChore && (
-          <form onSubmit={handleEditChore}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Edit Chore</h2>
-            <div className="space-y-4">
-              <input type="text" value={newChoreName} onChange={e => setNewChoreName(e.target.value)} placeholder="Chore name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-              <textarea value={newChoreDescription} onChange={e => setNewChoreDescription(e.target.value)} placeholder="Description (optional)" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" rows={3}></textarea>
-              <input type="number" value={newChorePoints} onChange={e => setNewChorePoints(e.target.value)} placeholder="Points" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required min="1" />
-               <div className="flex items-center justify-between">
-                <label htmlFor="assignTo" className="text-slate-600 font-medium">Assign To:</label>
-                <select id="assignTo" value={newChoreAssignedTo} onChange={e => setNewChoreAssignedTo(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                  <option value="unassigned">Anyone</option>
-                  {childUsers.map(child => (
-                    <option key={child.id} value={child.id}>{child.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center justify-between">
-                <label htmlFor="recurrence" className="text-slate-600 font-medium">Frequency:</label>
-                <select id="recurrence" value={newChoreRecurrence} onChange={e => setNewChoreRecurrence(e.target.value as ChoreRecurrence)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                  <option value={ChoreRecurrence.None}>One-time</option>
-                  <option value={ChoreRecurrence.Daily}>Daily</option>
-                  <option value={ChoreRecurrence.Weekly}>Weekly</option>
-                </select>
-              </div>
-              <div className="flex items-center">
-                <input type="checkbox" id="requiresApproval" checked={newChoreRequiresApproval} onChange={e => setNewChoreRequiresApproval(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500" />
-                <label htmlFor="requiresApproval" className="ml-3 block text-sm font-medium text-slate-700">Requires parent approval</label>
-              </div>
-              <button type="submit" className="w-full bg-sky-500 text-white p-3 rounded-md font-bold hover:bg-sky-600 transition-colors">Save Changes</button>
-            </div>
-          </form>
-        )}
-        {modalContent === 'addReward' && (
-          <form onSubmit={handleAddReward}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Add New Reward</h2>
-            <input type="text" value={newRewardName} onChange={e => setNewRewardName(e.target.value)} placeholder="Reward name" className="w-full p-2 border rounded mb-2 bg-slate-50 text-slate-800" required />
-            <input type="number" value={newRewardPoints} onChange={e => setNewRewardPoints(e.target.value)} placeholder="Points cost" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required min="1" />
-            <button type="submit" className="w-full bg-green-500 text-white p-2 rounded font-bold hover:bg-green-600">Add Reward</button>
-          </form>
-        )}
-        {modalContent === 'addPoints' && (
-          <form onSubmit={handleAddPoints}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Assign Points</h2>
-            <p className="mb-4 text-slate-600">Give extra points for a job well done or deduct points if needed (use a negative number).</p>
-            <div className="flex items-center justify-between mb-4">
-              <label htmlFor="assignTo" className="text-slate-600 font-medium">For:</label>
-                <select id="assignTo" value={manualPointsUser} onChange={e => setManualPointsUser(e.target.value)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                  {childUsers.map(child => (
-                    <option key={child.id} value={child.id}>{child.name}</option>
-                  ))}
-                </select>
-            </div>
-            <input type="number" value={manualPoints} onChange={e => setManualPoints(e.target.value)} placeholder="Enter points (e.g., 50 or -10)" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required />
-            <button type="submit" className="w-full bg-purple-500 text-white p-2 rounded font-bold hover:bg-purple-600">Assign Points</button>
-          </form>
-        )}
-        {modalContent === 'requestPoints' && (
-          <form onSubmit={handleRequestPoints}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Request Points</h2>
-            <p className="mb-4 text-slate-600">Did something extra? Describe what you did to earn more points!</p>
-            <textarea value={requestDescription} onChange={e => setRequestDescription(e.target.value)} placeholder="Description (e.g., cleaned the garage)" className="w-full p-2 border rounded mb-2 bg-slate-50 text-slate-800" required />
-            <input type="number" value={requestPoints} onChange={e => setRequestPoints(e.target.value)} placeholder="Points requested" className="w-full p-2 border rounded mb-4 bg-slate-50 text-slate-800" required min="1" />
-            <button type="submit" className="w-full bg-fuchsia-500 text-white p-2 rounded font-bold hover:bg-fuchsia-600">Send Request</button>
-          </form>
-        )}
-        {modalContent === 'addUser' && (
-          <form onSubmit={handleAddUser}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Add Family Member</h2>
-            <div className="space-y-4">
-                <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-                <div className="flex items-center justify-between">
-                    <label htmlFor="userRole" className="text-slate-600 font-medium">Role:</label>
-                    <select id="userRole" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                        <option value="child">Child</option>
-                        <option value="parent">Parent</option>
-                    </select>
-                </div>
-                <button type="submit" className="w-full bg-blue-500 text-white p-3 rounded-md font-bold hover:bg-blue-600 transition-colors">Add Member</button>
-            </div>
-          </form>
-        )}
-        {modalContent === 'editUser' && editingUser && (
-          <form onSubmit={handleEditUser}>
-            <h2 className="text-2xl font-bold mb-4 text-slate-700">Edit {editingUser.name}</h2>
-            <div className="space-y-4">
-                <input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Name" className="w-full p-3 border rounded-md bg-slate-50 text-slate-800" required />
-                <div className="flex items-center justify-between">
-                    <label htmlFor="userRole" className="text-slate-600 font-medium">Role:</label>
-                    <select id="userRole" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)} className="p-2 border rounded-md bg-slate-50 text-slate-800">
-                        <option value="child">Child</option>
-                        <option value="parent">Parent</option>
-                    </select>
-                </div>
-                <p className="text-xs text-slate-500">Changing a user's role will reset their points.</p>
-                <button type="submit" className="w-full bg-sky-500 text-white p-3 rounded-md font-bold hover:bg-sky-600 transition-colors">Save Changes</button>
-            </div>
-          </form>
-        )}
-      </Modal>
-    </div>
+      </div>
+    </ThemeProvider>
   );
 };
 
-export default App;
+// Modal Component
+const Modal: React.FC<{
+  title: string;
+  onClose: () => void;
+  onSubmit: (e: React.FormEvent) => void;
+  children: React.ReactNode;
+}> = ({ title, onClose, onSubmit, children }) => (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{title}</h2>
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+          ✕
+        </button>
+      </div>
+      {children}
+    </div>
+  </div>
+);
+
+// Notification Panel Component
+const NotificationPanel: React.FC<{
+  notifications: Notification[];
+  onClose: () => void;
+}> = ({ notifications, onClose }) => (
+  <div className="fixed inset-0 bg-black/50 flex items-start justify-end z-50">
+    <div className="bg-white dark:bg-slate-800 rounded-t-xl p-4 max-w-sm w-full">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Notifications</h2>
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+            ✕
+          </button>
+          <button onClick={handleClearNotifications} className="text-sm text-red-500 hover:text-red-600">
+            Clear All
+          </button>
+        </div>
+      </div>
+      <div className="space-y-2 max-h-64 overflow-y-auto">
+        {notifications.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+            No notifications yet
+          </p>
+        ) : (
+          notifications.map(notification => (
+            <div key={notification.id} className="bg-slate-50 dark:bg-slate-700 rounded-lg p-3">
+              <p className="text-sm text-slate-800 dark:text-slate-200">{notification.message}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+const root = createRoot(document.getElementById('root'));
+root.render(<App />);

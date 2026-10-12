@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "open-design": {
+      "command": "C:\\Users\\ejuni\\AppData\\Local\\Programs\\Open Design\\Open Design.exe",
+      "args": [
+        "C:\\Users\\ejuni\\AppData\\Local\\Programs\\Open Design\\resources\\app\\prebundled\\daemon\\daemon-cli.mjs",
+        "mcp"
+      ],
+      "env": {
+        "OD_DATA_DIR": "C:\\Users\\ejuni\\AppData\\Roaming\\Open Design\\namespaces\\release-stable-win\\data",
+        "OD_SIDECAR_CLIENT_ENDPOINT": "\\\\.\\pipe\\open-design-sidecar-c4f7f5fc582354070903311fb49e17b6",
+        "OD_MCP_BOOTSTRAP_COMMAND": "C:\\Users\\ejuni\\AppData\\Local\\Programs\\Open Design\\Open Design.exe",
+        "OD_MCP_BOOTSTRAP_ARGS": "[\"--headless\"]",
+        "ELECTRON_RUN_AS_NODE": "1"
+      }
+    }
+  }
+}

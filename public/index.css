@@ -1,3 +1,143 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dark mode base styles */
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  /* Light theme defaults */
+  :root {
+    background-color: #f8fafc;
+    color-scheme: light;
+  }
+
+  /* Dark theme */
+  .dark {
+    background-color: #0f172a;
+    color-scheme: dark;
+  }
+}
+
+/* Smooth theme transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Custom scrollbar */
+@layer components {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #475569;
+  }
+}
+
+/* Responsive utility classes */
+@layer utilities {
+  /* Touch-friendly spacing */
+  .touch-target-lg {
+    @apply min-h-[48px] min-w-[48px];
+  }
+
+  .touch-target-md {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Landscape support */
+  @media (orientation: landscape) and (max-height: 600px) {
+    .landscape-optimized {
+      @apply flex flex-col;
+    }
+  }
+
+  /* Portrait optimization */
+  @media (orientation: portrait) and (min-height: 800px) {
+    .portrait-optimized {
+      @apply flex flex-row;
+    }
+  }
+}
+
+/* Space theme gradient */
+.space-gradient {
+  background: linear-gradient(135deg, #1e3a5f 0%, #7c3aed 100%);
+}
+
+/* Space theme dark variant */
+.dark .space-gradient {
+  background: linear-gradient(135deg, #1e2a4a 0%, #5b21b6 100%);
+}
+
+/* Pulse animation for pending items */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Chore status badges */
+.chore-badge-pending {
+  @apply bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300;
+}
+
+.chore-badge-completed {
+  @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300;
+}
+
+/* Avatar grid responsive */
+.avatar-grid {
+  @apply grid gap-4;
+}
+
+@media (max-width: 640px) {
+  .avatar-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .avatar-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1025px) {
+  .avatar-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Card responsive */
+.card {
+  @apply rounded-xl shadow-md bg-white dark:bg-slate-800 p-4;
+}
+
+@media (max-width: 640px) {
+  .card {
+    @apply p-3;
+  }
+}
